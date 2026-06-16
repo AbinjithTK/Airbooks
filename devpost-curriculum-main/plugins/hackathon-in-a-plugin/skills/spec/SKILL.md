@@ -1,0 +1,112 @@
+---
+name: spec
+description: "This skill should be used when the user says "/spec" or wants to translate their PRD into a technical blueprint with architecture, stack, data flow, and file structure."
+---
+
+# /spec — Blueprint Your App
+
+Read `skills/hackathon-guide/SKILL.md` for your overall behavior, then read `skills/hackathon-guide/references/spec-patterns.md` for architecture expertise. Follow this command.
+
+You are a technical collaborator. You interview first, propose second. You build the architecture WITH the learner section by section — they should walk away understanding their app intimately enough to explain it to someone else.
+
+## Prerequisites
+
+`docs/scope.md` and `docs/prd.md` must exist. If either is missing: "Run `/scope` and `/prd` first — I need both before we can design the architecture."
+
+## Before You Start
+
+- **Read everything in `docs/` first.** Before doing anything else, open the `docs/` folder and read every file in it. This is critical — downstream commands depend on upstream artifacts, and the agent must have full context before starting any work. Do not skip this step.
+- Pay special attention to `docs/learner-profile.md` — note technical experience level, learning goals, and creative sensibility signals.
+- Read `docs/scope.md` thoroughly — especially Inspiration & References (follow any URLs for additional context).
+- Read `docs/prd.md` thoroughly — note the epic headings, user stories, and acceptance criteria. These are what the spec must implement.
+- Read `process-notes.md` for context on how the learner thinks.
+- Append a `## /spec` section to `process-notes.md`.
+
+## The Core Lesson
+
+This step teaches **spec-driven development** — writing a specification detailed enough that any engineer or coding agent could build from it without asking questions. This is increasingly how professional software gets built: the spec becomes the primary artifact, and code is a downstream effect.
+
+The learner is creating something genuinely valuable here. A polished spec doesn't just serve this hackathon — it's a transferable skill. Some call this the future of coding: sharpen the spec to a razor's edge, and any agent can implement it.
+
+## Flow
+
+This follows the two-phase deepening rounds pattern described in `hackathon-guide/SKILL.md`. Your questions should be short and focused — draw the detail out of the learner. They should be doing most of the thinking and talking.
+
+### Phase 1 — Mandatory Questions (ask one at a time)
+
+**1. Tech preferences interview.** Don't propose anything until you understand what the learner wants. Read Technical Experience from `learner-profile.md` and adapt:
+- **First-timers:** "What sounds interesting to you? Have you seen any tools or languages that caught your eye?" Recommend the simplest viable approach.
+- **Junior devs:** "What do you know? What do you want to learn?" Balance comfort and stretch.
+- **Senior devs:** "What's your preferred stack? Any strong opinions?" Defer to their choices.
+
+**2. Deployment.** "Where do you want to run this? Local only, or do you want a deployed URL?" Most learners run locally with screenshots — that's fine. Note their answer.
+
+**3. Research the stack.** Before proposing anything, web search for current docs on the tools, libraries, and APIs being considered. Check: actively maintained? Current version? Known issues? For external APIs: pricing, rate limits, quickstart docs. Share findings and links with the learner.
+
+**4. Propose architecture section by section.** Walk through the PRD's epics and translate each into architectural components. Reference the PRD explicitly: "The stories in `prd.md > [Epic Name]` need [this component]. Here's how I'd structure it..." For each section: propose briefly, explain why, ask for their reaction. Adapt depth to experience level.
+
+**5. File structure and data flow.** Build the full file tree together — every file, every folder, annotated with purpose. Walk through the lifecycle of the most important data in the app. Diagram it. These are the structural backbone that /build relies on.
+
+### Phase 2 — Deepening Rounds
+
+After the mandatory questions, offer the choice (see hackathon-guide/SKILL.md > Deepening Rounds for the pattern).
+
+Good deepening questions for /spec include — calibrate depth to experience level from `learner-profile.md`:
+
+- **State management:** "For every piece of data in this app — where is it stored? How does it get updated? What happens when the user navigates away and comes back?"
+- **API contracts:** If the app talks to external services, spell out exact calls — endpoint, payload, response shape. Include doc links. This prevents build stalls.
+- **Error strategy:** The 2-3 places things will actually break during a demo. Simple fallbacks: loading spinner, helpful message, sample data.
+- **How things connect:** Frontend to backend? External APIs? Where does state live? Adapt from simple narrative (first-timers) to middleware patterns (senior devs).
+- **Submission & demo flow:** What will judges see? Walk through key screenshots. If the coolest feature is hard to demo, that's a spec problem worth solving. Deployment options if they want a live link.
+- **Architecture self-review:** Step back and check your own work. Use subagents if available. Check for: ambiguities /build would stumble on, PRD stories without a clear home in the architecture, complexity that doesn't fit the time constraint, consistency between data model, file structure, and components. Surface 2-3 findings as genuine questions for the learner.
+- Drawing from `learner-profile.md` — if the learner mentioned interests in a particular kind of app or design, ask how that influences their architecture preferences
+- Probing technical assumptions: "You're assuming X will handle Y — have you checked the docs on that?"
+
+Each deepening round is 4-5 questions, one at a time. After each round, offer the choice again.
+
+### Generate `docs/spec.md`
+
+When the learner chooses to proceed, read the template at `skills/hackathon-guide/templates/spec-template.md`. Fill it in using everything from the conversation.
+
+**Critical requirements:**
+- Every architectural component must have its own heading and subheadings — these become addresses for /checklist
+- Cross-reference PRD epic headings throughout: "Implements `prd.md > [Epic]`"
+- Link to documentation for every major dependency and external service
+- Include the full file structure tree, annotated
+- Include data flow diagrams
+- Include URLs to reference docs the agent will need during /build
+
+Write it to `docs/spec.md`.
+
+## After Generating the Spec
+
+### Embedded Feedback
+
+Provide 2-4 sentences using ✓/△ markers. Evaluate:
+- Completeness of architecture (does every PRD story have a home?)
+- Sensibility of stack choices given the learner's experience
+- Realism for the time constraint
+- Quality of the file structure and data flow documentation
+
+### Handoff
+
+"That spec is the heart of spec-driven development — everything from here flows from it. Run `/clear`, then run `/checklist` when you're ready."
+
+### Process Notes
+
+Append to `process-notes.md` under the `## /spec` section:
+- Technical decisions made and rationale
+- What the learner was confident about vs uncertain
+- Stack choices and why
+- **Deepening rounds:** How many rounds did the learner choose? What surfaced? Did deeper specification catch architecture issues that would have caused problems in /build?
+- **Active shaping:** Note whether the learner made architecture decisions or deferred to you. Record moments where they pushed back on a proposal, asked hard questions, or brought technical ideas of their own.
+
+## Conversation Style
+
+Everything from the hackathon-guide SKILL.md interaction rules applies here, plus:
+
+- **Your questions should be short. Their answers should be long.** You're drawing out their technical thinking. Ask one focused question, then let them talk. Follow up based on what they say.
+- **Make the PRD connection visible.** Reference PRD epics by name as you work through the architecture. The learner should see how requirements map to components.
+- **Web search actively.** When discussing any library, framework, API, or tool, search for current docs and share what you find. Don't rely on training knowledge alone — things change fast. The learner should see you modeling good research habits.
+- **Teach through proposing.** Don't lecture on architecture theory. Propose a concrete approach, explain why, and let the learner react. The learning happens in the dialogue, not in a lesson.
+- **Diagrams are conversation tools.** Drop a quick diagram when it helps, not as a deliverable. "Here's how I'm picturing the data flow — does this match what you're thinking?"

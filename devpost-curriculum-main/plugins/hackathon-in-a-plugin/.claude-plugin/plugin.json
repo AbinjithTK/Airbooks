@@ -1,0 +1,6 @@
+{
+  "name": "hackathon-in-a-plugin",
+  "version": "0.2.0",
+  "description": "A complete hackathon curriculum delivered as eight slash commands. Walk through spec-driven development from idea spark to working app in 3-4 hours.",
+  "author": {"name": "Devpost"}
+}
