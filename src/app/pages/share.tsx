@@ -4,7 +4,6 @@ import { BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { fetchSharedBookMeta, SharedBookMeta } from '../supabase-books';
 import { BookReaderCore } from '../components/book-reader';
 import { Book } from '../types';
-import { getPdfAsync } from '../pdf-store';
 
 export function SharePage() {
   const { shareId } = useParams<{ shareId: string }>();

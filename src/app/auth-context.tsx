@@ -17,6 +17,7 @@ interface AuthContextType {
   profile: Profile | null;
   accessToken: string | null;
   loading: boolean;
+  oauthError: string | null;
   signInWithGoogle: () => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error?: string }>;
@@ -24,139 +25,42 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
-const OAUTH_POPUP_NAME = 'airbooks-google-oauth';
-
 const AuthContext = createContext<AuthContextType>(null as any);
 export const useAuth = () => useContext(AuthContext);
 
-/** True when this document is the Google OAuth popup we opened. */
-export function isOAuthPopup(): boolean {
-  if (typeof window === 'undefined') return false;
-  // Primary check: window was opened by us with the correct name.
-  if (window.opener && window.opener !== window && window.name === OAUTH_POPUP_NAME) {
-    return true;
-  }
-  // Fallback: if we have an opener and the URL contains OAuth tokens/errors,
-  // we're likely the OAuth popup (window.name may be lost after cross-origin
-  // redirect through Google).
-  if (window.opener && window.opener !== window) {
-    const hash = window.location.hash;
-    if (hash.includes('access_token') || hash.includes('error')) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Rendered inside the OAuth popup after Google redirects back. We let the
- * popup's own Supabase client finish the sign-in (it handles both implicit and
- * PKCE callbacks, and shares localStorage with the opener since it's the same
- * origin). Once a session exists, we notify the opener and close.
- */
-export function OAuthCallback() {
-  const [message, setMessage] = useState('Completing sign-in…');
-
-  useEffect(() => {
-    const supabase = getSupabaseClient();
-    let done = false;
-
-    const finish = () => {
-      if (done) return;
-      done = true;
-      try {
-        window.opener?.postMessage({ source: 'airbooks-oauth-done' }, window.location.origin);
-      } catch (e) {
-        console.log('Failed to notify opener of OAuth completion:', e);
-      }
-      // Try to close the popup. If it fails (some browsers block window.close),
-      // show a success message so the user knows to close manually.
-      try {
-        window.close();
-      } catch {}
-      // If window.close() didn't work, update the message.
-      setTimeout(() => {
-        if (!window.closed) {
-          setMessage('Sign-in complete! You can close this window.');
-        }
-      }, 500);
-    };
-
-    const check = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) finish();
-    };
-
-    // Surface an explicit provider error if Google sent one back.
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const queryParams = new URLSearchParams(window.location.search);
-    const providerError =
-      hashParams.get('error_description') ||
-      hashParams.get('error') ||
-      queryParams.get('error_description') ||
-      queryParams.get('error');
-    if (providerError) {
-      console.log('OAuth provider error:', providerError);
-      setMessage(`Sign-in failed: ${providerError}`);
-      return;
-    }
-
-    // If hash contains tokens, try to explicitly set the session.
-    // detectSessionInUrl should handle this, but in popup contexts it can fail.
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    if (accessToken && refreshToken) {
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      }).then(({ data, error }) => {
-        if (error) {
-          console.log('setSession error in popup:', error.message);
-          setMessage(`Sign-in failed: ${error.message}`);
-        } else if (data.session) {
-          finish();
-        }
-      });
-    } else {
-      // No tokens in hash — poll for session (detectSessionInUrl may handle it).
-      check();
-      const timer = setInterval(check, 300);
-      const stop = setTimeout(() => {
-        clearInterval(timer);
-        if (!done) setMessage('Sign-in is taking longer than expected. You can close this window.');
-      }, 12000);
-
-      return () => {
-        clearInterval(timer);
-        clearTimeout(stop);
-      };
-    }
-  }, []);
-
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'system-ui, sans-serif',
-        color: '#64748B',
-        padding: 24,
-        textAlign: 'center',
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = getSupabaseClient();
+
+  // Capture everything from the URL synchronously at first render — before
+  // Supabase's detectSessionInUrl can clear window.location.hash / search.
+  const [urlState] = useState(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search);
+    // Conclusive diagnostic: shows EXACTLY what Google/Supabase returned.
+    // - hash has access_token  → tokens arrived, sign-in should succeed
+    // - search has code        → PKCE flow (unexpected with implicit config)
+    // - both empty             → redirect URL not allow-listed; tokens stripped
+    console.log('[AirBooks auth] return URL', {
+      origin: window.location.origin,
+      hash: window.location.hash || '(empty)',
+      search: window.location.search || '(empty)',
+    });
+    return {
+      // Implicit flow: tokens arrive in hash
+      accessToken: hash.get('access_token'),
+      refreshToken: hash.get('refresh_token'),
+      // PKCE flow: code arrives in query string
+      pkceCode: query.get('code'),
+      // Provider errors
+      error: hash.get('error_description') || hash.get('error') ||
+             query.get('error_description') || query.get('error'),
+    };
+  });
+
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const [oauthError, setOauthError] = useState<string | null>(null);
   const accessToken = session?.access_token ?? null;
 
   const loadProfile = async (token: string) => {
@@ -167,148 +71,148 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const { profile } = await res.json();
         setProfile(profile);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        console.log('Profile load failed:', err);
       }
-    } catch (e) {
-      console.log('Profile load error:', e);
-    }
+    } catch {}
   };
 
   useEffect(() => {
     let active = true;
-    let resolved = false;
 
-    // Check if the URL contains OAuth hash tokens (implicit flow redirect).
-    // detectSessionInUrl processes this asynchronously, so we must wait for the
-    // onAuthStateChange callback before declaring "no session". If tokens are in
-    // the hash, we give the client extra time to parse them.
-    const hashHasTokens =
-      window.location.hash.includes('access_token') ||
-      window.location.hash.includes('error');
+    // True when we're returning from an OAuth redirect (either flow).
+    const isOAuthReturn = !!(
+      urlState.accessToken || urlState.refreshToken || urlState.pkceCode
+    );
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (!active) return;
-      resolved = true;
-      setSession(newSession);
-      if (newSession?.access_token) {
-        loadProfile(newSession.access_token);
-      } else {
-        setProfile(null);
+    // Track whether the initial auth state has been resolved.
+    // Unlike the previous "settle once" approach, we still process SIGNED_IN /
+    // SIGNED_OUT / TOKEN_REFRESHED after init so the session stays live.
+    let initResolved = false;
+
+    const resolveInit = () => {
+      if (!initResolved) {
+        initResolved = true;
+        setLoading(false);
       }
-      // If we were waiting for the hash to resolve, stop loading now.
-      setLoading(false);
+    };
 
-      // Clean up the hash after Supabase has consumed the tokens so the URL
-      // looks clean and a page refresh won't re-process stale tokens.
-      if (hashHasTokens && newSession) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    // --- Core auth state listener ---
+    // Key insight: do NOT let INITIAL_SESSION(null) stop the loading spinner
+    // when we're mid-OAuth-return. detectSessionInUrl fires SIGNED_IN
+    // asynchronously AFTER INITIAL_SESSION. If we resolve loading on
+    // INITIAL_SESSION(null) and the session update comes in SIGNED_IN, that
+    // update must still be applied — which is why we always handle SIGNED_IN.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!active) return;
+
+      console.log('[AirBooks auth]', event, newSession ? '✓ session' : '✗ no session');
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        setSession(newSession);
+        if (newSession?.access_token) loadProfile(newSession.access_token);
+        resolveInit();
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setProfile(null);
+        resolveInit();
+        return;
+      }
+
+      if (event === 'INITIAL_SESSION') {
+        if (newSession) {
+          // Already have a session (e.g. returning user with stored session).
+          setSession(newSession);
+          if (newSession.access_token) loadProfile(newSession.access_token);
+          resolveInit();
+        } else if (!isOAuthReturn) {
+          // No session, no OAuth in progress — definitively not signed in.
+          resolveInit();
+        }
+        // If isOAuthReturn: wait for SIGNED_IN from detectSessionInUrl.
+        // DO NOT resolve loading yet — that would flash the login page.
       }
     });
 
-    // Initial session check — but if hash tokens are present, defer to
-    // onAuthStateChange which fires once the token is parsed from the URL.
-    (async () => {
-      if (hashHasTokens) {
-        // Give Supabase client up to 5s to parse the hash and fire
-        // onAuthStateChange. If it doesn't fire, stop loading anyway.
-        setTimeout(() => {
-          if (active && !resolved) setLoading(false);
-        }, 5000);
-        return;
-      }
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      setSession(data.session);
-      if (data.session?.access_token) await loadProfile(data.session.access_token);
-      setLoading(false);
-    })();
+    if (urlState.error) {
+      console.error('[AirBooks auth] OAuth provider error:', urlState.error);
+      setOauthError(urlState.error);
+      resolveInit();
+      return () => { active = false; sub.subscription.unsubscribe(); };
+    }
 
-    // The OAuth popup finishes sign-in itself and writes the session to shared
-    // (same-origin) storage, then posts this signal. We re-read the session so
-    // this window flips to signed-in immediately (Supabase also broadcasts it).
-    const onMessage = async (e: MessageEvent) => {
-      // Validate origin to prevent cross-origin message spoofing
-      if (e.origin !== window.location.origin) return;
-      if (e.data?.source !== 'airbooks-oauth-done') return;
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setSession(data.session);
-        if (data.session.access_token) loadProfile(data.session.access_token);
+    if (urlState.accessToken && urlState.refreshToken) {
+      // Implicit flow return — clean the URL immediately (prevents stale token
+      // replay on refresh), then call setSession() directly as a backup to
+      // detectSessionInUrl (whichever resolves first wins).
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+      supabase.auth
+        .setSession({
+          access_token: urlState.accessToken,
+          refresh_token: urlState.refreshToken,
+        })
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error) {
+            console.error('[AirBooks auth] setSession() error:', error.message);
+            setOauthError(`Sign-in failed: ${error.message}`);
+            resolveInit();
+            return;
+          }
+          if (data.session) {
+            setSession(data.session);
+            if (data.session.access_token) loadProfile(data.session.access_token);
+          }
+          resolveInit();
+        });
+    }
+
+    // PKCE flow: detectSessionInUrl handles exchangeCodeForSession automatically.
+    // We just wait for the SIGNED_IN event above — no manual action needed.
+
+    // Hard timeout: if detectSessionInUrl never fires SIGNED_IN (e.g. the PKCE
+    // code verifier was lost), stop loading so the user isn't stuck forever.
+    const timeout = setTimeout(() => {
+      if (active && !initResolved) {
+        console.warn('[AirBooks auth] Timed out waiting for session after OAuth return.');
+        if (isOAuthReturn) {
+          setOauthError('Sign-in timed out. Please try again.');
+        }
+        resolveInit();
       }
-    };
-    window.addEventListener('message', onMessage);
+    }, 10_000);
 
     return () => {
       active = false;
       sub.subscription.unsubscribe();
-      window.removeEventListener('message', onMessage);
+      clearTimeout(timeout);
     };
   }, []);
 
   const signInWithGoogle = async () => {
-    // Requires Google to be enabled in the Supabase dashboard:
-    // https://supabase.com/docs/guides/auth/social-login/auth-google
-    //
-    // Strategy: Try popup first (best UX — no page reload). If the popup can't
-    // be opened (sandboxed iframe, popup blocker), fall back to same-window
-    // redirect. The implicit flow + detectSessionInUrl will parse the tokens
-    // from the URL hash when the page reloads.
-
+    setOauthError(null);
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        skipBrowserRedirect: true,
-      },
+      options: { redirectTo: window.location.origin },
+      // No skipBrowserRedirect — let Supabase handle the redirect itself.
+      // This ensures the PKCE code verifier is stored before navigation.
     });
-    if (error) {
-      console.log('Google sign in error:', error.message);
-      return { error: error.message };
-    }
-    if (!data?.url) {
-      return { error: 'Could not start Google sign-in (no auth URL returned).' };
-    }
-
-    // Attempt popup approach — open synchronously to avoid popup blockers.
-    let popup: Window | null = null;
-    try {
-      popup = window.open(
-        data.url,
-        OAUTH_POPUP_NAME,
-        'width=500,height=680,menubar=no,toolbar=no',
-      );
-    } catch {
-      popup = null;
-    }
-
-    if (popup && !popup.closed) {
-      // Popup opened successfully. OAuthCallback in the popup will handle the
-      // rest and post a message back. Nothing else to do here.
-      return {};
-    }
-
-    // Popup failed (blocked or sandboxed). Redirect in the same window.
-    // Don't try to break out of iframes — Figma Make manages its own frame
-    // structure. Just navigate this window and let the hash tokens be parsed
-    // on reload.
-    window.location.href = data.url;
+    if (error) return { error: error.message };
+    if (!data?.url) return { error: 'Could not start Google sign-in.' };
     return {};
+    // Supabase navigates the window automatically; no need to set location.href.
   };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.log('Email sign in error:', error.message);
-      return { error: error.message };
-    }
+    if (error) return { error: error.message };
     return {};
   };
 
   const signUp = async (email: string, password: string, name: string) => {
     try {
-      // Create the user server-side (auto-confirmed), then sign in.
       const res = await fetch(`${SERVER}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${publicAnonKey}` },
@@ -316,13 +220,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: 'Signup failed.' }));
-        console.log('Sign up error:', error);
         return { error: error ?? 'Signup failed.' };
       }
       return await signIn(email, password);
     } catch (e) {
-      console.log('Sign up request error:', e);
-      return { error: `Network error during signup: ${e}` };
+      return { error: `Network error: ${e}` };
     }
   };
 
@@ -337,7 +239,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, accessToken, loading, signInWithGoogle, signIn, signUp, signOut, refreshProfile }}
+      value={{
+        session, profile, accessToken, loading, oauthError,
+        signInWithGoogle, signIn, signUp, signOut, refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>
