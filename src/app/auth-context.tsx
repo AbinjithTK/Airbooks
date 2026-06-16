@@ -193,16 +193,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     setOauthError(null);
+
+    // Determine the origin OAuth should return to. When the app is embedded in
+    // an iframe (e.g. the Figma Make editor preview), window.location.origin is
+    // a sandboxed origin that is NOT on Supabase's redirect allow-list — so we
+    // try to use the TOP-LEVEL origin instead. Reading a cross-origin top frame
+    // throws, so we guard it and fall back to our own origin.
+    let origin = window.location.origin;
+    const inIframe = window.top != null && window.top !== window.self;
+    try {
+      if (inIframe && window.top?.location?.origin) {
+        origin = window.top.location.origin;
+      }
+    } catch {
+      // Cross-origin top frame — can't read it; keep our own origin.
+    }
+    // Trailing slash: a wildcard allow-list entry (https://host/**) does NOT
+    // match the bare origin (https://host) with no path, so we always send a
+    // path. This avoids the "I added it but it still bounces" allow-list gotcha.
+    const redirectTo = `${origin}/`;
+
+    console.log('[AirBooks auth] starting Google OAuth', { redirectTo, inIframe });
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
-      // No skipBrowserRedirect — let Supabase handle the redirect itself.
-      // This ensures the PKCE code verifier is stored before navigation.
+      options: {
+        redirectTo,
+        // We navigate manually below so we can target the TOP window and break
+        // out of any iframe — otherwise the consent + token return happen inside
+        // the sandboxed iframe and the session is lost on the way back.
+        skipBrowserRedirect: true,
+      },
     });
     if (error) return { error: error.message };
     if (!data?.url) return { error: 'Could not start Google sign-in.' };
+
+    // Navigating window.top is allowed cross-origin (only *reading* it is
+    // blocked), so this safely breaks out of the iframe. Fall back to the
+    // current window if top isn't available.
+    try {
+      if (window.top) {
+        window.top.location.href = data.url;
+      } else {
+        window.location.href = data.url;
+      }
+    } catch {
+      window.location.href = data.url;
+    }
     return {};
-    // Supabase navigates the window automatically; no need to set location.href.
   };
 
   const signIn = async (email: string, password: string) => {

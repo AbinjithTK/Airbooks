@@ -15,13 +15,15 @@ export function getSupabaseClient(): SupabaseClient {
           autoRefreshToken: true,
           // Parse the OAuth result out of the redirect URL automatically.
           detectSessionInUrl: true,
-          // Use the implicit flow (token returned directly in the URL hash)
-          // instead of PKCE. PKCE stores a one-time code verifier in page
-          // storage, which is lost when the OAuth redirect breaks out of the
-          // Figma Make preview iframe — causing the code exchange to fail and
-          // bouncing the user back to the login screen. Implicit flow needs no
-          // verifier, so the session survives the cross-context redirect.
-          flowType: 'implicit',
+          // Use the PKCE flow. PKCE returns the auth result as a `?code=...`
+          // QUERY parameter, which the figma.site static host preserves.
+          // Implicit flow returns tokens in the URL `#fragment`, which
+          // figma.site strips on hydration before the app can read it — the
+          // session was being silently dropped and the user bounced back to
+          // login. PKCE's code verifier is stored in localStorage and survives
+          // the same-origin, top-level (non-iframe) redirect used by the
+          // published site, so the code exchange succeeds.
+          flowType: 'pkce',
         },
       },
     );
