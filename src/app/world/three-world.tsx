@@ -22,6 +22,7 @@ export function ThreeWorld({ view, reducedMotion }: ThreeWorldProps) {
     if (!canvasRef.current) return;
     try {
       ctrlRef.current = createGreenWorld(canvasRef.current, { reducedMotion });
+      console.log('[AirBooks world] three.js green meadow active ✓');
     } catch (e) {
       console.warn('[AirBooks world] three.js init failed, using CSS fallback:', e);
       setFailed(true);

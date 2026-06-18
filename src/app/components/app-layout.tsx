@@ -178,7 +178,11 @@ export function AppLayout() {
           setSearchQuery,
         }}
       >
-        <div className="min-h-screen bg-[#F8FAFB]/80 dark:bg-[#0A1628]/80 backdrop-blur-md transition-colors">
+        <div
+          className={`min-h-screen transition-colors ${
+            isReaderView ? '' : 'bg-[#F8FAFB]/45 dark:bg-[#0A1628]/45'
+          }`}
+        >
           {!isReaderView && (
             <AirBooksNav
               onAddBook={() => setIsModalOpen(true)}
