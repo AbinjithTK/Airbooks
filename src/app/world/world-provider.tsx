@@ -6,18 +6,19 @@ import {
   useRef,
   ReactNode,
 } from 'react';
+import { ThreeWorld } from './three-world';
 import { WorldFallback } from './world-fallback';
-import { prefersReducedMotion } from './capabilities';
+import { hasWebGL, prefersReducedMotion } from './capabilities';
 
 export type WorldView = 'login' | 'library' | 'reader' | 'writer';
-export type WorldEnvironment = 'library-study';
+export type WorldEnvironment = 'library-study' | 'green-meadow';
 
 interface WorldContextValue {
   currentView: WorldView;
   environment: WorldEnvironment;
   setView: (view: WorldView) => void;
   setEnvironment: (env: WorldEnvironment) => void;
-  /** Whether the live WebGL scene is rendering (always false in this runtime). */
+  /** True when the live WebGL world is rendering (false → CSS fallback). */
   enabled: boolean;
   reducedMotion: boolean;
 }
@@ -30,31 +31,21 @@ export function useWorld(): WorldContextValue {
   return ctx;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// The live WebGL scene (react-three-fiber) is intentionally NOT imported or
-// mounted here. It cannot initialize in the Figma Make runtime — the host
-// injects a second React instance, so fiber's reconciler throws
-// "Cannot read properties of undefined (reading 'fg')", and statically
-// importing fiber also breaks the production build (unresolved
-// "react-reconciler/constants"). So the immersive world is rendered with pure
-// CSS (WorldFallback), which works identically in the editor preview and the
-// published site.
-//
-// The full Three.js implementation still lives, unreferenced, under
-// src/app/world/{world-scene,camera-rig,environments,scenes}. To use it, wire
-// <WorldScene> back into a <Canvas> here — but only in a standalone build with
-// a single React instance.
-// ─────────────────────────────────────────────────────────────────────────
+// The world is rendered with VANILLA three.js (src/app/world/three/green-world.ts),
+// NOT react-three-fiber. r3f's custom React reconciler crashes in the Figma Make
+// runtime (host injects a second React → "reading 'fg'"), but plain three.js has
+// no React dependency and runs fine. ThreeWorld falls back to a CSS ambient
+// scene if WebGL is unavailable.
 
 export function WorldProvider({ children }: { children: ReactNode }) {
   const [currentView, setCurrentView] = useState<WorldView>('login');
-  const [environment, setEnvironmentState] = useState<WorldEnvironment>('library-study');
+  const [environment, setEnvironmentState] = useState<WorldEnvironment>('green-meadow');
 
-  const caps = useRef<{ reducedMotion: boolean }>();
+  const caps = useRef<{ enabled: boolean; reducedMotion: boolean }>();
   if (!caps.current) {
-    caps.current = { reducedMotion: prefersReducedMotion() };
+    caps.current = { enabled: hasWebGL(), reducedMotion: prefersReducedMotion() };
   }
-  const { reducedMotion } = caps.current;
+  const { enabled, reducedMotion } = caps.current;
 
   const value = useMemo<WorldContextValue>(
     () => ({
@@ -62,17 +53,21 @@ export function WorldProvider({ children }: { children: ReactNode }) {
       environment,
       setView: setCurrentView,
       setEnvironment: setEnvironmentState,
-      enabled: false,
+      enabled,
       reducedMotion,
     }),
-    [currentView, environment, reducedMotion],
+    [currentView, environment, enabled, reducedMotion],
   );
 
   return (
     <WorldContext.Provider value={value}>
-      {/* Persistent CSS world (behind everything, non-interactive). */}
+      {/* Persistent world layer (behind everything, non-interactive). */}
       <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
-        <WorldFallback reducedMotion={reducedMotion} />
+        {enabled ? (
+          <ThreeWorld view={currentView} reducedMotion={reducedMotion} />
+        ) : (
+          <WorldFallback reducedMotion={reducedMotion} />
+        )}
       </div>
 
       {/* HTML overlay — all interactive app UI lives here, above the world. */}
