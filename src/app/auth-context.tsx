@@ -71,8 +71,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const { profile } = await res.json();
         setProfile(profile);
+        return;
       }
-    } catch {}
+      // 401/403 means the server no longer accepts this session (expired /
+      // revoked token). Sign out so the app returns to a clean login state
+      // instead of a half-broken session that can't load any data.
+      if (res.status === 401 || res.status === 403) {
+        console.warn(
+          `[AirBooks auth] Session rejected by server (status ${res.status}); signing out.`,
+        );
+        await supabase.auth.signOut().catch(() => {});
+        return;
+      }
+      console.error('[AirBooks auth] Failed to load profile, status:', res.status);
+    } catch (e) {
+      // Network error — keep the session; the profile can be retried later via
+      // refreshProfile(). Don't sign the user out for a transient blip.
+      console.error('[AirBooks auth] Network error loading profile:', e);
+    }
   };
 
   useEffect(() => {
@@ -244,9 +260,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return {};
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      return {};
+    } catch (e) {
+      return { error: `Network error while signing in: ${e}` };
+    }
   };
 
   const signUp = async (email: string, password: string, name: string) => {
@@ -267,8 +287,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('[AirBooks auth] Error during sign-out:', e);
+    } finally {
+      // Always clear local state so the UI returns to login even if the network
+      // call failed — the local session is invalidated either way.
+      setSession(null);
+      setProfile(null);
+    }
   };
 
   const refreshProfile = async () => {

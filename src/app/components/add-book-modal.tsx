@@ -1,4 +1,4 @@
-import { X, Upload, BookOpen, FileText, CheckCircle2, Cloud } from 'lucide-react';
+import { X, Upload, BookOpen, FileText, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useRef } from 'react';
 import { Book } from '../types';
@@ -26,6 +26,10 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
   const [uploading, setUploading] = useState(false);
   const [cloudUploading, setCloudUploading] = useState(false);
   const [cloudUploadDone, setCloudUploadDone] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Once metadata is created on the server we keep its id so a retry re-uploads
+  // to the SAME book instead of creating a duplicate.
+  const [createdBookId, setCreatedBookId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,34 +70,50 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCloudUploading(true);
+    setUploadError(null);
 
-    // 1. Persist book metadata to the user's library on the server.
+    // 1. Persist book metadata to the user's library on the server. We pass
+    //    hasPdf:false here — the server flips it to true only once the PDF
+    //    upload actually lands in cloud storage, so a failed upload never
+    //    leaves a phantom "has PDF" book behind. Reuse the id on retry.
     const saved = await saveBook({
+      ...(createdBookId ? { id: createdBookId } : {}),
       title,
       author,
       category,
       pages: pdfPageCount || pages,
       coverColor,
-      hasPdf: !!pdfArrayBuffer,
+      hasPdf: false,
       totalPdfPages: pdfPageCount || undefined,
     });
 
     if (!saved) {
       setCloudUploading(false);
-      alert('Could not save the book to your library. Please check your connection and try again.');
+      setUploadError(
+        'Could not save the book to your library. Please check your connection and try again.',
+      );
       return;
     }
+    setCreatedBookId(saved.id);
 
     let finalBook: Book = saved;
 
-    // 2. If a PDF was attached, store it locally and upload to private cloud storage.
+    // 2. If a PDF was attached, store it locally (instant offline reads) AND
+    //    upload it to private cloud storage right away. The cloud upload is
+    //    required: if it fails we surface the error and keep the modal open so
+    //    the user can retry — the book is NOT silently added without its PDF.
     if (pdfArrayBuffer) {
       await storePdfPersistent(saved.id, pdfArrayBuffer);
       const uploadedUrl = await uploadPdfToCloud(saved.id, pdfArrayBuffer);
-      if (uploadedUrl) {
-        finalBook = { ...saved, hasPdf: true, pdfUrl: uploadedUrl };
-        setCloudUploadDone(true);
+      if (!uploadedUrl) {
+        setCloudUploading(false);
+        setUploadError(
+          'Saving the PDF to the cloud failed. Your details are kept — press “Add Book” to retry the upload.',
+        );
+        return;
       }
+      finalBook = { ...saved, hasPdf: true, pdfUrl: uploadedUrl };
+      setCloudUploadDone(true);
     }
 
     setCloudUploading(false);
@@ -114,6 +134,8 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
     setUploading(false);
     setCloudUploading(false);
     setCloudUploadDone(false);
+    setUploadError(null);
+    setCreatedBookId(null);
     setDragOver(false);
   };
 
@@ -344,13 +366,19 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
                 {cloudUploading && (
                   <div className="flex items-center gap-3 p-3 bg-[#E8F2FF] dark:bg-[#1E3A5F] rounded-xl">
                     <div className="w-4 h-4 border-2 border-[#0F6FFF]/30 border-t-[#0F6FFF] rounded-full animate-spin flex-shrink-0" />
-                    <span className="text-sm text-[#0F6FFF]">Uploading to cloud for sharing…</span>
+                    <span className="text-sm text-[#0F6FFF]">Saving to your cloud library…</span>
                   </div>
                 )}
                 {cloudUploadDone && !cloudUploading && (
                   <div className="flex items-center gap-3 p-3 bg-[#D1FAE5] dark:bg-[#064E3B] rounded-xl">
                     <Cloud className="w-4 h-4 text-[#10B981] flex-shrink-0" />
-                    <span className="text-sm text-[#10B981]">Uploaded — book is shareable via link</span>
+                    <span className="text-sm text-[#10B981]">Saved to your cloud library</span>
+                  </div>
+                )}
+                {uploadError && !cloudUploading && (
+                  <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-red-600 dark:text-red-400">{uploadError}</span>
                   </div>
                 )}
 

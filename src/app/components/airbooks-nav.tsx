@@ -1,4 +1,4 @@
-import { Search, BookOpen, User, Moon, Sun, LogOut, Library } from 'lucide-react';
+import { Search, BookOpen, User, Moon, Sun, LogOut, Library, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -11,6 +11,8 @@ interface AirBooksNavProps {
   profileEmail: string;
   bookCount: number;
   onSignOut: () => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
 }
 
 export function AirBooksNav({
@@ -20,6 +22,8 @@ export function AirBooksNav({
   profileEmail,
   bookCount,
   onSignOut,
+  searchQuery,
+  onSearchChange,
 }: AirBooksNavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -59,9 +63,21 @@ export function AirBooksNav({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#64748B]" />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search your library..."
-                className="w-full pl-12 pr-4 py-3 bg-[#F8FAFB] dark:bg-[#0A1628] border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20 rounded-xl text-[#1A2332] dark:text-[#F1F5F9] placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-[#0F6FFF] dark:focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                aria-label="Search your library"
+                className="w-full pl-12 pr-10 py-3 bg-[#F8FAFB] dark:bg-[#0A1628] border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20 rounded-xl text-[#1A2332] dark:text-[#F1F5F9] placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-[#0F6FFF] dark:focus:ring-[#3B82F6] focus:border-transparent transition-all"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => onSearchChange('')}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-[#64748B] hover:text-[#1A2332] dark:hover:text-[#F1F5F9] hover:bg-[#E8F2FF] dark:hover:bg-[#1E3A5F] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 

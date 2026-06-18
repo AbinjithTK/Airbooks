@@ -3,11 +3,12 @@ import { Outlet, useLocation } from 'react-router';
 import { Loader2, BookOpen } from 'lucide-react';
 import { AirBooksNav } from './airbooks-nav';
 import { AddBookModal } from './add-book-modal';
-import { AuthPage } from './auth-page';
+import { AuthPageV2 } from './auth-page-v2';
 import { Book } from '../types';
 import { listBooks, saveBook, deleteBook as apiDeleteBook } from '../supabase-books';
 import { removePdf } from '../pdf-store';
 import { useAuth } from '../auth-context';
+import { useWorld } from '../world/world-provider';
 import { HandTrackingProvider } from './hand-tracking-provider';
 import { HandCursorOverlay } from './hand-cursor-overlay';
 
@@ -17,8 +18,10 @@ interface AppContextType {
   openAddModal: () => void;
   addBook: (book: Book) => void;
   updateBook: (book: Book) => void;
-  removeBook: (bookId: string) => void;
+  removeBook: (bookId: string) => Promise<void>;
   refreshLibrary: () => Promise<void>;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
 }
 
 export const AppContext = createContext<AppContextType>({
@@ -27,19 +30,73 @@ export const AppContext = createContext<AppContextType>({
   openAddModal: () => {},
   addBook: () => {},
   updateBook: () => {},
-  removeBook: () => {},
+  removeBook: async () => {},
   refreshLibrary: async () => {},
+  searchQuery: '',
+  setSearchQuery: () => {},
 });
 export const useAppContext = () => useContext(AppContext);
 
+// ─── Theme helpers ───
+const THEME_KEY = 'airbooks-theme';
+
+// Resolve the initial theme: an explicit saved choice wins, otherwise fall back
+// to the operating-system preference (prefers-color-scheme).
+function getInitialDarkMode(): boolean {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark') return true;
+    if (saved === 'light') return false;
+  } catch {
+    // localStorage may be unavailable (private mode / partitioned storage).
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
 export function AppLayout() {
   const { session, profile, loading, signOut } = useAuth();
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { setView } = useWorld();
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(getInitialDarkMode);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
   const isReaderView = location.pathname.startsWith('/read/');
+
+  // Drive the persistent 3D camera from auth + route state. Login when signed
+  // out, reader while reading, library otherwise.
+  useEffect(() => {
+    if (loading) return;
+    if (!session) {
+      setView('login');
+    } else {
+      setView(isReaderView ? 'reader' : 'library');
+    }
+  }, [loading, session, isReaderView, setView]);
+
+  // Keep the <html> class in sync with the current theme.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
+
+  // Follow the OS theme automatically — but only while the user hasn't made an
+  // explicit choice (no saved preference). Once they toggle, we stop following.
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const handler = (e: MediaQueryListEvent) => {
+      let hasExplicitChoice = false;
+      try {
+        hasExplicitChoice = !!localStorage.getItem(THEME_KEY);
+      } catch {
+        // ignore
+      }
+      if (!hasExplicitChoice) setIsDarkMode(e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
@@ -59,8 +116,17 @@ export function AppLayout() {
   }, [session, refreshLibrary]);
 
   const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      try {
+        // Persist the explicit choice so it survives refreshes and overrides
+        // the OS preference from now on.
+        localStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
+      } catch {
+        // ignore
+      }
+      return next;
+    });
   };
 
   const addBook = useCallback((book: Book) => {
@@ -94,7 +160,7 @@ export function AppLayout() {
   }
 
   if (!session) {
-    return <AuthPage />;
+    return <AuthPageV2 />;
   }
 
   return (
@@ -108,6 +174,8 @@ export function AppLayout() {
           updateBook,
           removeBook,
           refreshLibrary,
+          searchQuery,
+          setSearchQuery,
         }}
       >
         <div className="min-h-screen bg-[#F8FAFB] dark:bg-[#0A1628] transition-colors">
@@ -120,6 +188,8 @@ export function AppLayout() {
               profileEmail={profile?.email ?? ''}
               bookCount={books.length}
               onSignOut={signOut}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
             />
           )}
 

@@ -1,16 +1,17 @@
 import { Book } from '../types';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { BookOpen, FileText, Eye, Info, Plus } from 'lucide-react';
+import { BookOpen, FileText, Eye, Info, Plus, Trash2 } from 'lucide-react';
 import { hasPdf } from '../pdf-store';
 import { useState } from 'react';
 
 interface BookShelfProps {
   books: Book[];
   onAddBook?: () => void;
+  onRequestDelete?: (book: Book) => void;
 }
 
-export function BookShelf({ books, onAddBook }: BookShelfProps) {
+export function BookShelf({ books, onAddBook, onRequestDelete }: BookShelfProps) {
   const navigate = useNavigate();
 
   // Build items: add-card first, then books
@@ -42,6 +43,7 @@ export function BookShelf({ books, onAddBook }: BookShelfProps) {
                   index={index}
                   shelfIndex={shelfIndex}
                   onOpen={(id) => navigate(`/read/${id}`)}
+                  onRequestDelete={onRequestDelete}
                 />
               )
             )}
@@ -381,9 +383,10 @@ interface BookCardProps {
   index: number;
   shelfIndex: number;
   onOpen: (id: string) => void;
+  onRequestDelete?: (book: Book) => void;
 }
 
-function BookCard({ book, index, shelfIndex, onOpen }: BookCardProps) {
+function BookCard({ book, index, shelfIndex, onOpen, onRequestDelete }: BookCardProps) {
   const [hovered, setHovered] = useState(false);
   const navigate = useNavigate();
   const bookHasPdf = book.hasPdf || hasPdf(book.id);
@@ -626,6 +629,36 @@ function BookCard({ book, index, shelfIndex, onOpen }: BookCardProps) {
                 <Info className="w-3.5 h-3.5" />
                 {book.pages} pages
               </motion.button>
+
+              {/* Delete button */}
+              {onRequestDelete && (
+                <motion.button
+                  className="absolute top-3 right-3 z-10 p-2 rounded-full text-white border border-white/20"
+                  style={{
+                    background: 'rgba(0,0,0,0.55)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                  }}
+                  animate={{
+                    opacity: hovered ? 1 : 0,
+                    scale: hovered ? 1 : 0.8,
+                  }}
+                  transition={{
+                    duration: 0.25,
+                    delay: hovered ? 0.05 : 0,
+                    ease: [0.25, 0.8, 0.25, 1],
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestDelete(book);
+                  }}
+                  aria-label={`Delete ${book.title}`}
+                  whileHover={{ scale: 1.1, background: 'rgba(220,38,38,0.9)' }}
+                  whileTap={{ scale: 0.92 }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </motion.button>
+              )}
             </motion.div>
           </div>
 

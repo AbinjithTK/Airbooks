@@ -10,6 +10,16 @@ import { flipThemes, FlipThemeConfig, themeRgba } from '../themes/flip-themes';
 import { readerThemes, ReaderThemeConfig } from '../themes/reader-themes';
 import { AnimatePresence, motion } from 'motion/react';
 import { buildShareUrl, buildEmbedCode, uploadPdfToCloud, shareBook } from '../supabase-books';
+import {
+  Spring,
+  resistanceCurve,
+  springPreset,
+  SNAP_THRESHOLD,
+  SCROLL_DISTANCE,
+  SCROLL_IDLE_MS,
+  OVERSCROLL_MAX,
+} from '../book-3d/flip-physics';
+import { CurlPage } from '../book-3d/curl-page';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 
@@ -46,18 +56,27 @@ function usePdfPageImage(
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1 });
         const dpr = window.devicePixelRatio || 1;
-        const scale = Math.min(PAGE_WIDTH / viewport.width, PAGE_HEIGHT / viewport.height) * dpr;
+        const targetW = PAGE_WIDTH * dpr;
+        const targetH = PAGE_HEIGHT * dpr;
+        const scale = Math.min(targetW / viewport.width, targetH / viewport.height);
         const scaledVp = page.getViewport({ scale });
 
         const canvas = document.createElement('canvas');
-        canvas.width = scaledVp.width;
-        canvas.height = scaledVp.height;
+        canvas.width = targetW;
+        canvas.height = targetH;
         const ctx = canvas.getContext('2d')!;
         ctx.fillStyle = pageBg;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Render into a full page-sized canvas instead of a tight PDF crop.
+        // The CSS curl slices use background-size: PAGE_WIDTH × PAGE_HEIGHT;
+        // matching that ratio prevents stretched or drifting content mid-flip.
+        const offsetX = (targetW - scaledVp.width) / 2;
+        const offsetY = (targetH - scaledVp.height) / 2;
         await page.render({
           canvasContext: ctx,
           viewport: scaledVp,
+          transform: [1, 0, 0, 1, offsetX, offsetY],
           intent: 'display',
         }).promise;
 
@@ -84,7 +103,6 @@ interface FlipState {
   isDragging: boolean;
 }
 
-const SNAP_THRESHOLD = 0.35;
 const PAPER_TEXTURE = "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")";
 
 interface BookReaderCoreProps {
@@ -115,6 +133,10 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
   const animRef = useRef<number>(0);
   const bookAreaRef = useRef<HTMLDivElement>(null);
 
+  // Responsive scale so the fixed-size book always fits its area (no clipping).
+  const [bookScale, setBookScale] = useState(1);
+  const scaleRef = useRef(1);
+
   const ft = flipThemes[activeFlipTheme];
   const rt = readerThemes[activeReaderTheme];
 
@@ -122,6 +144,10 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
     active: false,
     startX: 0,
     direction: 'next' as FlipDirection,
+    // Velocity tracking (progress units / second) for velocity-aware release.
+    lastProgress: 0,
+    lastT: 0,
+    velocity: 0,
   });
 
   // Determine if we have a usable PDF
@@ -152,71 +178,96 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
   const prevLeftPage = usePdfPageImage(book.id, pdfAvailable ? leftPageNum - 2 : -1, pdfUrl, pageBg);
   const prevRightPage = usePdfPageImage(book.id, pdfAvailable ? leftPageNum - 1 : -1, pdfUrl, pageBg);
 
-  /* ── Animation helpers ── */
-  const animateSnap = useCallback((
+  /* ── Animation helpers (spring physics) ── */
+  // Drives `progress` toward a target with a real spring, carrying over the
+  // user's release velocity. Replaces the old linear cubic tween so flips feel
+  // like paper settling rather than a canned animation.
+  const animateSpring = useCallback((
     fromProgress: number,
     toProgress: number,
     direction: FlipDirection,
+    initialVelocity: number,
     onComplete: () => void,
   ) => {
     cancelAnimationFrame(animRef.current);
-    const startTime = performance.now();
-    const distance = Math.abs(toProgress - fromProgress);
-    const duration = Math.max(150, Math.min(500, distance * 600));
+    const preset = springPreset(toProgress >= 1 ? 'complete' : 'snapback', direction);
+    const spring = new Spring(fromProgress, preset);
+    spring.setTarget(toProgress);
+    spring.velocity = initialVelocity;
 
+    let last = performance.now();
     const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const rawT = Math.min(elapsed / duration, 1);
-      const t = 1 - Math.pow(1 - rawT, 3);
-      const progress = fromProgress + (toProgress - fromProgress) * t;
+      const dt = (now - last) / 1000;
+      last = now;
+      const settled = spring.update(dt);
+      // Clamp the visible progress; the spring may overshoot slightly (settle).
+      const progress = Math.max(0, Math.min(1, spring.value));
       setFlip({ direction, progress, isDragging: false });
-      if (rawT < 1) {
-        animRef.current = requestAnimationFrame(tick);
-      } else {
+      if (settled) {
         onComplete();
+      } else {
+        animRef.current = requestAnimationFrame(tick);
       }
     };
     animRef.current = requestAnimationFrame(tick);
   }, []);
 
-  const releaseFlip = useCallback((direction: FlipDirection, currentProgress: number) => {
-    if (currentProgress > SNAP_THRESHOLD) {
-      animateSnap(currentProgress, 1, direction, () => {
+  // Release decision: complete if past the threshold OR thrown with enough
+  // forward velocity (fast swipe); otherwise snap back.
+  const releaseFlip = useCallback((
+    direction: FlipDirection,
+    currentProgress: number,
+    velocity = 0,
+  ) => {
+    const shouldComplete = currentProgress > SNAP_THRESHOLD || velocity > 1.2;
+    if (shouldComplete) {
+      animateSpring(currentProgress, 1, direction, velocity, () => {
         setCurrentSpread(prev => direction === 'next' ? prev + 1 : prev - 1);
         setFlip(null);
       });
     } else {
-      animateSnap(currentProgress, 0, direction, () => setFlip(null));
+      animateSpring(currentProgress, 0, direction, Math.min(0, velocity), () => setFlip(null));
     }
-  }, [animateSnap]);
+  }, [animateSpring]);
 
   const autoFlip = useCallback((direction: FlipDirection) => {
     if (flip) return;
     if (direction === 'next' && currentSpread >= totalSpreads - 1) return;
     if (direction === 'prev' && currentSpread <= 0) return;
-    animateSnap(0, 1, direction, () => {
+    animateSpring(0, 1, direction, 0.6, () => {
       setCurrentSpread(prev => direction === 'next' ? prev + 1 : prev - 1);
       setFlip(null);
     });
-  }, [flip, currentSpread, totalSpreads, animateSnap]);
+  }, [flip, currentSpread, totalSpreads, animateSpring]);
 
   /* ── Mouse drag ── */
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!dragRef.current.active) return;
-      const { startX, direction } = dragRef.current;
-      const deltaX = e.clientX - startX;
-      const progress = direction === 'next'
-        ? Math.max(0, Math.min(1, -deltaX / (PAGE_WIDTH * 1.2)))
-        : Math.max(0, Math.min(1, deltaX / (PAGE_WIDTH * 1.2)));
-      setFlip({ direction, progress, isDragging: true });
+      const d = dragRef.current;
+      if (!d.active) return;
+      const deltaX = e.clientX - d.startX;
+      // Raw drag as a fraction of page width, then shape it through the
+      // resistance curve so the start feels "stuck" and the end "wants" to fall.
+      const raw = (d.direction === 'next' ? -deltaX : deltaX) / (PAGE_WIDTH * scaleRef.current);
+      const progress = resistanceCurve(raw);
+
+      // Track velocity in progress-units/sec for the release decision.
+      const now = performance.now();
+      const dt = (now - d.lastT) / 1000;
+      if (dt > 0) d.velocity = (progress - d.lastProgress) / dt;
+      d.lastProgress = progress;
+      d.lastT = now;
+
+      setFlip({ direction: d.direction, progress, isDragging: true });
     };
     const onMouseUp = () => {
-      if (!dragRef.current.active) return;
-      dragRef.current.active = false;
+      const d = dragRef.current;
+      if (!d.active) return;
+      d.active = false;
+      const velocity = d.velocity;
       setFlip(prev => {
         if (!prev) return null;
-        releaseFlip(prev.direction, prev.progress);
+        releaseFlip(prev.direction, prev.progress, velocity);
         return prev;
       });
     };
@@ -233,11 +284,44 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
     if (direction === 'next' && currentSpread >= totalSpreads - 1) return;
     if (direction === 'prev' && currentSpread <= 0) return;
     e.preventDefault();
-    dragRef.current = { active: true, startX: e.clientX, direction };
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      direction,
+      lastProgress: 0,
+      lastT: performance.now(),
+      velocity: 0,
+    };
     setFlip({ direction, progress: 0, isDragging: true });
   }, [flip, currentSpread, totalSpreads]);
 
   useEffect(() => { return () => cancelAnimationFrame(animRef.current); }, []);
+
+  // ── Responsive scale-to-fit ──
+  // The book is a fixed 380×540 two-page spread (~914px incl. nav buttons). On
+  // smaller viewports that overflowed and got clipped, so we measure the
+  // available area and scale the whole book down to fit. The scale also feeds
+  // the drag math so a flip still tracks the on-screen page width.
+  useEffect(() => {
+    const el = bookAreaRef.current;
+    if (!el) return;
+    const recompute = () => {
+      const availW = el.clientWidth - 16;
+      const availH = el.clientHeight - 16;
+      const naturalW = PAGE_WIDTH * 2 + 2 + 150; // pages + spine + nav buttons/gaps
+      const naturalH = PAGE_HEIGHT;
+      const s = Math.max(
+        0.2,
+        Math.min(1, Math.min(availW / naturalW, availH / naturalH) * 0.94),
+      );
+      scaleRef.current = s;
+      setBookScale(s);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Keyboard
   useEffect(() => {
@@ -249,6 +333,62 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [autoFlip, navigate, hideClose]);
+
+  /* ── Trackpad / wheel horizontal scroll ── */
+  const scrollRef = useRef({ pool: 0, direction: null as FlipDirection | null, idle: 0 });
+  useEffect(() => {
+    const el = bookAreaRef.current;
+    if (!el) return;
+
+    const release = () => {
+      const s = scrollRef.current;
+      const dir = s.direction;
+      s.pool = 0;
+      s.direction = null;
+      if (!dir) return;
+      setFlip(prev => {
+        if (prev && prev.isDragging) releaseFlip(prev.direction, prev.progress);
+        return prev;
+      });
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      // Only react to horizontal intent; let vertical scroll pass through.
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (flip && !flip.isDragging) return; // mid auto-animation: ignore
+      e.preventDefault();
+
+      const s = scrollRef.current;
+      const dir: FlipDirection = e.deltaX > 0 ? 'next' : 'prev';
+
+      // Lock direction for the duration of a scroll gesture.
+      if (!s.direction) s.direction = dir;
+      const active = s.direction;
+
+      // Boundary bounce: can't flip past the first/last spread.
+      const atStart = active === 'prev' && currentSpread <= 0;
+      const atEnd = active === 'next' && currentSpread >= totalSpreads - 1;
+
+      s.pool += active === 'next' ? e.deltaX : -e.deltaX;
+      s.pool = Math.max(0, s.pool);
+      let progress = s.pool / SCROLL_DISTANCE;
+      progress = atStart || atEnd
+        ? Math.min(OVERSCROLL_MAX, progress) // soft bounce ceiling at boundary
+        : Math.min(1, progress);
+
+      setFlip({ direction: active, progress, isDragging: true });
+
+      // Treat a pause in wheel events as a release.
+      window.clearTimeout(s.idle);
+      s.idle = window.setTimeout(release, SCROLL_IDLE_MS);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      window.clearTimeout(scrollRef.current.idle);
+    };
+  }, [flip, currentSpread, totalSpreads, releaseFlip]);
 
   /* ── Hand gesture ── */
   const { hand, isActive: gestureActive } = useHandTracking();
@@ -295,9 +435,6 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
   const sinAngle = Math.sin((flipAngle * Math.PI) / 180);
   const curlFactor = Math.sin(flipProgress * Math.PI);
   const si = ft.shadowIntensity;
-
-  // Paper curl skew — peaks at 90°
-  const skewDeg = Math.sin((flipAngle * Math.PI) / 180) * 4;
 
   const sharedPageProps = {
     ft, rt, pdfAvailable,
@@ -421,8 +558,11 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
       )}
 
       {/* Book area */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-8 select-none" ref={bookAreaRef}>
-        <div className="relative flex items-center gap-5">
+      <div className="flex-1 flex items-center justify-center px-4 pb-8 select-none overflow-hidden" ref={bookAreaRef}>
+        <div
+          className="relative flex items-center gap-5"
+          style={{ transform: `scale(${bookScale})`, transformOrigin: 'center center' }}
+        >
           {/* Prev button */}
           <button
             onClick={() => autoFlip('prev')}
@@ -434,12 +574,12 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
           </button>
 
           {/* The Book */}
-          <div className="relative" style={{ perspective: '2400px', perspectiveOrigin: '50% 50%' }}>
+          <div className="relative" style={{ perspective: '3000px', perspectiveOrigin: '50% 46%' }}>
             <div className="flex" style={{ transformStyle: 'preserve-3d' }}>
 
               {/* ── LEFT PAGE ── */}
               <div
-                className="relative overflow-hidden rounded-l-lg"
+                className="relative overflow-hidden rounded-l-xl"
                 style={{
                   width: PAGE_WIDTH,
                   height: PAGE_HEIGHT,
@@ -468,7 +608,7 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
 
               {/* ── RIGHT PAGE ── */}
               <div
-                className="relative overflow-hidden rounded-r-lg"
+                className="relative overflow-hidden rounded-r-xl"
                 style={{
                   width: PAGE_WIDTH,
                   height: PAGE_HEIGHT,
@@ -499,109 +639,36 @@ export function BookReaderCore({ book, pdfBuffer, onShareClick, hideClose, onThe
                 <>
                   {/* Layer A: broad ambient shadow */}
                   <div
-                    className="absolute top-2 pointer-events-none rounded-lg"
+                    className="absolute top-0 pointer-events-none rounded-xl"
                     style={{
                       left: flipDirection === 'next' ? PAGE_WIDTH + 2 : 0,
                       width: PAGE_WIDTH,
                       height: PAGE_HEIGHT,
                       transformOrigin: flipDirection === 'next' ? 'left center' : 'right center',
                       transform: flipDirection === 'next'
-                        ? `rotateY(-${flipAngle}deg) translateZ(-4px)`
-                        : `rotateY(${180 - flipAngle}deg) translateZ(-4px)`,
-                      boxShadow: `0 0 ${50 * sinAngle}px ${20 * sinAngle}px ${themeRgba(ft.shadowRgb, 0.25 * si * sinAngle)}`,
+                        ? `rotateY(-${flipAngle}deg) translateZ(-12px)`
+                        : `rotateY(${180 - flipAngle}deg) translateZ(-12px)`,
+                      boxShadow: `0 ${18 * sinAngle}px ${60 * sinAngle}px ${16 * sinAngle}px ${themeRgba(ft.shadowRgb, 0.22 * si * sinAngle)}`, opacity: 0.9,
                       zIndex: 27,
                     }}
                   />
 
-                  {/* The flipping page */}
-                  <div
-                    className="absolute top-0"
-                    style={{
-                      left: flipDirection === 'next' ? PAGE_WIDTH + 2 : 0,
-                      width: PAGE_WIDTH,
-                      height: PAGE_HEIGHT,
-                      transformStyle: 'preserve-3d',
-                      transformOrigin: flipDirection === 'next' ? 'left center' : 'right center',
-                      transform: flipDirection === 'next'
-                        ? `rotateY(-${flipAngle}deg) skewY(${skewDeg}deg)`
-                        : `rotateY(${180 - flipAngle}deg) skewY(${-skewDeg}deg)`,
-                      zIndex: 30,
-                    }}
-                  >
-                    {/* Front face */}
-                    <div
-                      className="absolute inset-0 overflow-hidden"
-                      style={{
-                        backfaceVisibility: 'hidden',
-                        background: ft.pageBackground,
-                        borderRadius: flipDirection === 'next' ? '0 8px 8px 0' : '8px 0 0 8px',
-                      }}
-                    >
-                      {flipDirection === 'next' ? (
-                        <PageContent {...sharedPageProps} imageDataUrl={rightPage.dataUrl} loading={rightPage.loading} pageNum={rightPageNum} side="right" />
-                      ) : (
-                        <PageContent {...sharedPageProps} imageDataUrl={leftPage.dataUrl} loading={leftPage.loading} pageNum={leftPageNum} side="left" />
-                      )}
-                      {ft.paperTexture && (
-                        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: PAPER_TEXTURE, opacity: ft.paperTextureOpacity }} />
-                      )}
-                      {/* Trailing edge shadow */}
-                      <div className="absolute inset-0 pointer-events-none" style={{
-                        background: flipDirection === 'next'
-                          ? `linear-gradient(to left, ${themeRgba(ft.shadowRgb, 0.3 * si * sinAngle)} 0%, ${themeRgba(ft.shadowRgb, 0.1 * si * sinAngle)} 20%, transparent 55%)`
-                          : `linear-gradient(to right, ${themeRgba(ft.shadowRgb, 0.3 * si * sinAngle)} 0%, ${themeRgba(ft.shadowRgb, 0.1 * si * sinAngle)} 20%, transparent 55%)`,
-                      }} />
-                      {/* Specular highlight */}
-                      {curlFactor > 0.12 && (
-                        <div className="absolute top-0 bottom-0 pointer-events-none" style={{
-                          width: 36,
-                          left: flipDirection === 'next' ? `${82 - flipProgress * 65}%` : `${18 + flipProgress * 65}%`,
-                          background: `linear-gradient(to ${flipDirection === 'next' ? 'right' : 'left'}, transparent, ${themeRgba(ft.highlightRgb, 0.18 * curlFactor)}, transparent)`,
-                        }} />
-                      )}
-                      {/* Fold crease */}
-                      <div className="absolute top-0 bottom-0 pointer-events-none" style={{
-                        width: 1.5,
-                        left: flipDirection === 'next' ? 0 : undefined,
-                        right: flipDirection === 'prev' ? 0 : undefined,
-                        background: themeRgba(ft.foldCreaseRgb, 0.15 * sinAngle),
-                        boxShadow: `0 0 4px ${themeRgba(ft.foldCreaseRgb, 0.1 * sinAngle)}`,
-                      }} />
-                    </div>
-
-                    {/* Back face */}
-                    <div
-                      className="absolute inset-0 overflow-hidden"
-                      style={{
-                        backfaceVisibility: 'hidden',
-                        transform: 'rotateY(180deg)',
-                        background: ft.pageBackgroundBack,
-                        borderRadius: flipDirection === 'next' ? '8px 0 0 8px' : '0 8px 8px 0',
-                      }}
-                    >
-                      {flipDirection === 'next' ? (
-                        <PageContent {...sharedPageProps} imageDataUrl={nextLeftPage.dataUrl} loading={nextLeftPage.loading} pageNum={rightPageNum + 1} side="left" />
-                      ) : (
-                        <PageContent {...sharedPageProps} imageDataUrl={prevRightPage.dataUrl} loading={prevRightPage.loading} pageNum={leftPageNum - 1} side="right" />
-                      )}
-                      {ft.paperTexture && (
-                        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: PAPER_TEXTURE, opacity: ft.paperTextureOpacity }} />
-                      )}
-                      {/* Revealed-face shadow */}
-                      <div className="absolute inset-0 pointer-events-none" style={{
-                        background: flipDirection === 'next'
-                          ? `linear-gradient(to right, ${themeRgba(ft.shadowRgb, 0.3 * si * sinAngle)} 0%, ${themeRgba(ft.shadowRgb, 0.08 * si * sinAngle)} 28%, transparent 60%)`
-                          : `linear-gradient(to left, ${themeRgba(ft.shadowRgb, 0.3 * si * sinAngle)} 0%, ${themeRgba(ft.shadowRgb, 0.08 * si * sinAngle)} 28%, transparent 60%)`,
-                      }} />
-                      {/* Fold crease back */}
-                      <div className="absolute top-0 bottom-0 pointer-events-none" style={{
-                        width: 1.5,
-                        right: flipDirection === 'next' ? 0 : undefined,
-                        left: flipDirection === 'prev' ? 0 : undefined,
-                        background: themeRgba(ft.foldCreaseRgb, 0.12 * sinAngle),
-                      }} />
-                    </div>
-                  </div>
+                  {/* The flipping page — real 3D curl (strip-based cylinder) */}
+                  <CurlPage
+                    width={PAGE_WIDTH}
+                    height={PAGE_HEIGHT}
+                    left={flipDirection === 'next' ? PAGE_WIDTH + 2 : 0}
+                    frontImage={flipDirection === 'next' ? rightPage.dataUrl : leftPage.dataUrl}
+                    backImage={flipDirection === 'next' ? nextLeftPage.dataUrl : prevRightPage.dataUrl}
+                    frontBg={ft.pageBackground}
+                    backBg={ft.pageBackgroundBack}
+                    progress={flipProgress}
+                    direction={flipDirection}
+                    shadowRgb={ft.shadowRgb}
+                    highlightRgb={ft.highlightRgb}
+                    shadowIntensity={si}
+                    segments={32}
+                  />
 
                   {/* Layer B: tight fold shadow cast onto underlying page */}
                   <div
