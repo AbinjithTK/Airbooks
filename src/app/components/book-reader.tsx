@@ -7,9 +7,11 @@ import {
 import { useNavigate, useParams } from 'react-router';
 import { getPdfAsync, evictPdfDocument, hasPdf } from '../pdf-store';
 import { useHandTracking } from './hand-tracking-provider';
-import { FlipTheme, ReaderTheme, Book } from '../types';
+import { FlipTheme, ReaderTheme, SkyboxTheme, Book } from '../types';
 import { flipThemes, FlipThemeConfig } from '../themes/flip-themes';
 import { readerThemes, ReaderThemeConfig } from '../themes/reader-themes';
+import { ReaderThemePicker } from './reader-theme-picker';
+import { useWorld } from '../world/world-provider';
 import { AnimatePresence, motion } from 'motion/react';
 import { buildShareUrl, buildEmbedCode, uploadPdfToCloud, shareBook } from '../supabase-books';
 import { FlipBook, FlipBookHandle, PAGE_WIDTH, PAGE_HEIGHT } from './flip-book';
@@ -376,6 +378,15 @@ export function BookReader() {
   const navigate = useNavigate();
   const book = books.find(b => b.id === id);
   const [shareOpen, setShareOpen] = useState(false);
+  const { setActiveSkybox } = useWorld();
+
+  // Apply the book's skybox theme when opening it
+  useEffect(() => {
+    if (book?.skyboxTheme) {
+      setActiveSkybox(book.skyboxTheme);
+    }
+    return () => { setActiveSkybox(null); };
+  }, [book?.skyboxTheme, setActiveSkybox]);
 
   if (!book) {
     return (
@@ -402,6 +413,10 @@ export function BookReader() {
         book={book}
         onShareClick={() => setShareOpen(true)}
         onThemeChange={themes => updateBook({ ...book, ...themes })}
+      />
+      <ReaderThemePicker
+        bookSkybox={book.skyboxTheme}
+        onSelect={(theme: SkyboxTheme) => updateBook({ ...book, skyboxTheme: theme })}
       />
       {shareOpen && (
         <ShareModal

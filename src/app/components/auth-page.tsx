@@ -33,123 +33,205 @@ export function AuthPage() {
       setError(result.error);
       setGoogleBusy(false);
     }
-    // On success the browser redirects to Google, so no need to reset state.
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F8FAFB] to-[#E8F2FF] dark:from-[#0A1628] dark:to-[#0F2138] px-6">
+    <div className="min-h-screen flex items-center justify-center px-6 py-12">
+      {/* Floating card with 3D perspective */}
       <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        initial={{ opacity: 0, y: 40, rotateX: 8 }}
+        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, duration: 0.8 }}
+        style={{ perspective: '1200px' }}
+        className="w-full max-w-[420px]"
       >
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-[#0F6FFF] to-[#0EA5E9] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#0F6FFF]/30">
-            <BookOpen className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-[#1A2332] dark:text-[#F1F5F9]">
-            {mode === 'signin' ? 'Welcome back' : 'Create your library'}
-          </h1>
-          <p className="text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
-            {mode === 'signin'
-              ? 'Sign in to access your AirBooks library'
-              : 'Sign up to start building your personal bookshelf'}
-          </p>
-        </div>
+        {/* Outer glow ring */}
+        <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-b from-white/20 to-transparent dark:from-white/5 blur-sm pointer-events-none" />
 
-        <div className="bg-white dark:bg-[#1A2332] rounded-2xl shadow-xl border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20 p-6">
-          {/* Google */}
-          <button
-            onClick={handleGoogle}
-            disabled={googleBusy || busy}
-            className="w-full py-3 px-4 bg-white dark:bg-[#0A1628] border border-[#E2E8F0] dark:border-[#1E293B] rounded-xl font-medium text-[#1A2332] dark:text-[#F1F5F9] hover:bg-[#F8FAFB] dark:hover:bg-[#0F2138] hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-3"
-          >
-            {googleBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon />}
-            Continue with Google
-          </button>
+        {/* Main card — layered glass + raised surface */}
+        <div
+          className="relative rounded-3xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(240,245,255,0.92) 100%)',
+            boxShadow: `
+              0 25px 60px -12px rgba(15, 111, 255, 0.15),
+              0 12px 30px -8px rgba(0, 0, 0, 0.12),
+              inset 0 1px 1px rgba(255,255,255,0.8),
+              inset 0 -1px 2px rgba(0,0,0,0.04)
+            `,
+          }}
+        >
+          {/* Top highlight strip */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-[#E2E8F0] dark:bg-[#1E293B]" />
-            <span className="text-xs text-[#94A3B8]">or</span>
-            <div className="flex-1 h-px bg-[#E2E8F0] dark:bg-[#1E293B]" />
-          </div>
+          <div className="relative p-8 pt-10">
+            {/* Logo */}
+            <motion.div
+              className="flex flex-col items-center mb-8"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            >
+              <motion.div
+                whileHover={{ scale: 1.08, rotate: -3 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                style={{
+                  background: 'linear-gradient(135deg, #0F6FFF 0%, #0EA5E9 60%, #06B6D4 100%)',
+                  boxShadow: `
+                    0 8px 24px -4px rgba(15, 111, 255, 0.45),
+                    0 4px 8px -2px rgba(15, 111, 255, 0.2),
+                    inset 0 1px 2px rgba(255,255,255,0.3),
+                    inset 0 -2px 4px rgba(0,0,0,0.1)
+                  `,
+                }}
+              >
+                <BookOpen className="w-8 h-8 text-white drop-shadow-sm" />
+              </motion.div>
+              <h1 className="text-[22px] font-bold tracking-tight text-[#1A2332]">
+                {mode === 'signin' ? 'Welcome back' : 'Create your library'}
+              </h1>
+              <p className="text-[13px] text-[#64748B] mt-1 tracking-wide">
+                {mode === 'signin'
+                  ? 'Sign in to access your AirBooks collection'
+                  : 'Sign up to start your personal bookshelf'}
+              </p>
+            </motion.div>
 
-          {/* Email / password */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <AnimatePresence mode="popLayout">
-              {mode === 'signup' && (
+            {/* Google button — raised 3D */}
+            <motion.button
+              onClick={handleGoogle}
+              disabled={googleBusy || busy}
+              whileHover={{ y: -2, scale: 1.01 }}
+              whileTap={{ y: 1, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              className="w-full py-3.5 px-4 rounded-xl font-semibold text-[14px] text-[#1A2332] tracking-wide flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              style={{
+                background: 'linear-gradient(to bottom, #FFFFFF 0%, #F8FAFB 100%)',
+                boxShadow: `
+                  0 4px 12px -2px rgba(0, 0, 0, 0.1),
+                  0 2px 4px -1px rgba(0, 0, 0, 0.06),
+                  inset 0 1px 1px rgba(255,255,255,0.9),
+                  inset 0 -1px 2px rgba(0,0,0,0.04)
+                `,
+                border: '1px solid rgba(0,0,0,0.08)',
+              }}
+            >
+              {googleBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon />}
+              Continue with Google
+            </motion.button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-4 my-6">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#94A3B8]">or</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <AnimatePresence mode="popLayout">
+                {mode === 'signup' && (
+                  <motion.div
+                    key="name"
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -10 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  >
+                    <SkeuField
+                      icon={<UserIcon className="w-4 h-4" />}
+                      type="text"
+                      placeholder="Your name"
+                      value={name}
+                      onChange={setName}
+                      required
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <SkeuField
+                icon={<Mail className="w-4 h-4" />}
+                type="email"
+                placeholder="Email address"
+                value={email}
+                onChange={setEmail}
+                required
+              />
+              <SkeuField
+                icon={<Lock className="w-4 h-4" />}
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={setPassword}
+                required
+              />
+
+              {error && (
                 <motion.div
-                  key="name"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2.5 p-3.5 rounded-xl text-[13px] text-red-600"
+                  style={{
+                    background: 'linear-gradient(135deg, #FEF2F2, #FFF1F2)',
+                    boxShadow: 'inset 0 2px 4px rgba(220, 38, 38, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.15)',
+                  }}
                 >
-                  <Field
-                    icon={<UserIcon className="w-4 h-4" />}
-                    type="text"
-                    placeholder="Your name"
-                    value={name}
-                    onChange={setName}
-                    required
-                  />
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
                 </motion.div>
               )}
-            </AnimatePresence>
 
-            <Field
-              icon={<Mail className="w-4 h-4" />}
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={setEmail}
-              required
-            />
-            <Field
-              icon={<Lock className="w-4 h-4" />}
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={setPassword}
-              required
-            />
+              {/* Submit button — bold gradient, raised */}
+              <motion.button
+                type="submit"
+                disabled={busy || googleBusy}
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ y: 1, scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                className="w-full py-3.5 rounded-xl font-bold text-[15px] text-white tracking-wide flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                style={{
+                  background: 'linear-gradient(135deg, #0F6FFF 0%, #0EA5E9 50%, #06B6D4 100%)',
+                  boxShadow: `
+                    0 8px 20px -4px rgba(15, 111, 255, 0.4),
+                    0 4px 8px -2px rgba(15, 111, 255, 0.2),
+                    inset 0 1px 2px rgba(255,255,255,0.25),
+                    inset 0 -2px 4px rgba(0,0,0,0.1)
+                  `,
+                  border: '1px solid rgba(255,255,255,0.15)',
+                }}
+              >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                {mode === 'signin' ? 'Sign In' : 'Create Account'}
+              </motion.button>
+            </form>
 
-            {error && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/40 rounded-xl text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={busy || googleBusy}
-              className="w-full py-3 bg-gradient-to-r from-[#0F6FFF] to-[#0EA5E9] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-[#0F6FFF]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-              {mode === 'signin' ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <p className="text-center text-sm text-[#64748B] dark:text-[#94A3B8] mt-5">
-            {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <button
-              onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
-                setError(null);
-              }}
-              className="text-[#0F6FFF] dark:text-[#3B82F6] font-medium hover:underline"
-            >
-              {mode === 'signin' ? 'Sign up' : 'Sign in'}
-            </button>
-          </p>
+            {/* Toggle mode */}
+            <p className="text-center text-[13px] text-[#64748B] mt-6">
+              {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <motion.button
+                onClick={() => {
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                  setError(null);
+                }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="text-[#0F6FFF] font-bold hover:text-[#0050CC] transition-colors cursor-pointer"
+              >
+                {mode === 'signin' ? 'Sign up' : 'Sign in'}
+              </motion.button>
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>
   );
 }
 
-function Field({
+/* ─── Skeuomorphic inset input field ─── */
+function SkeuField({
   icon,
   type,
   placeholder,
@@ -164,21 +246,38 @@ function Field({
   onChange: (v: string) => void;
   required?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
+
   return (
-    <div className="relative">
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B]">{icon}</div>
+    <motion.div
+      animate={{
+        boxShadow: focused
+          ? 'inset 0 2px 6px rgba(15, 111, 255, 0.12), 0 0 0 3px rgba(15, 111, 255, 0.1)'
+          : 'inset 0 2px 6px rgba(0, 0, 0, 0.06), inset 0 1px 2px rgba(0, 0, 0, 0.04)',
+      }}
+      transition={{ duration: 0.2 }}
+      className="relative rounded-xl overflow-hidden"
+      style={{
+        background: 'linear-gradient(to bottom, #F1F5F9, #F8FAFB)',
+        border: focused ? '1px solid rgba(15, 111, 255, 0.3)' : '1px solid rgba(0,0,0,0.06)',
+      }}
+    >
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]">{icon}</div>
       <input
         type={type}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         required={required}
-        className="w-full pl-11 pr-4 py-3 bg-[#F8FAFB] dark:bg-[#0A1628] border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20 rounded-xl text-[#1A2332] dark:text-[#F1F5F9] placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-[#0F6FFF] dark:focus:ring-[#3B82F6] focus:border-transparent transition-all"
+        className="w-full pl-11 pr-4 py-3.5 bg-transparent text-[14px] font-medium text-[#1A2332] placeholder-[#94A3B8] focus:outline-none tracking-wide"
       />
-    </div>
+    </motion.div>
   );
 }
 
+/* ─── Google icon ─── */
 function GoogleIcon() {
   return (
     <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">

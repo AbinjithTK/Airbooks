@@ -1,8 +1,10 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { Loader2, BookOpen } from 'lucide-react';
 import { AirBooksNav } from './airbooks-nav';
 import { AddBookModal } from './add-book-modal';
+import { BookCreator } from './book-creator';
+import { BookOpenCinematic } from './book-open-cinematic';
 import { AuthPageV2 } from './auth-page-v2';
 import { Book } from '../types';
 import { listBooks, saveBook, deleteBook as apiDeleteBook } from '../supabase-books';
@@ -22,6 +24,8 @@ interface AppContextType {
   refreshLibrary: () => Promise<void>;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  /** Trigger cinematic book-open animation then navigate to reader */
+  openBook: (book: Book) => void;
 }
 
 export const AppContext = createContext<AppContextType>({
@@ -34,6 +38,7 @@ export const AppContext = createContext<AppContextType>({
   refreshLibrary: async () => {},
   searchQuery: '',
   setSearchQuery: () => {},
+  openBook: () => {},
 });
 export const useAppContext = () => useContext(AppContext);
 
@@ -55,17 +60,22 @@ function getInitialDarkMode(): boolean {
 
 export function AppLayout() {
   const { session, profile, loading, signOut } = useAuth();
-  const { setView } = useWorld();
+  const { setView, setActiveSkybox } = useWorld();
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState<boolean>(getInitialDarkMode);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cinematicBook, setCinematicBook] = useState<Book | null>(null);
   const location = useLocation();
   const isReaderView = location.pathname.startsWith('/read/');
+  const isCreateView = location.pathname === '/create';
+  const isWriterView = location.pathname.startsWith('/write/');
+  const isChoiceView = location.pathname === '/new';
+  const isFullScreen = isReaderView || isCreateView || isWriterView || isChoiceView;
 
-  // Drive the persistent 3D camera from auth + route state. Login when signed
-  // out, reader while reading, library otherwise.
+  // Drive the persistent 3D camera from auth + route state.
   useEffect(() => {
     if (loading) return;
     if (!session) {
@@ -74,6 +84,19 @@ export function AppLayout() {
       setView(isReaderView ? 'reader' : 'library');
     }
   }, [loading, session, isReaderView, setView]);
+
+  // Pre-apply book's skybox theme when entering reader mode
+  useEffect(() => {
+    if (isReaderView) {
+      const bookId = location.pathname.split('/read/')[1];
+      const book = books.find(b => b.id === bookId);
+      if (book?.skyboxTheme) {
+        setActiveSkybox(book.skyboxTheme);
+      }
+    } else {
+      setActiveSkybox(null);
+    }
+  }, [isReaderView, books, location.pathname, setActiveSkybox]);
 
   // Keep the <html> class in sync with the current theme.
   useEffect(() => {
@@ -145,6 +168,17 @@ export function AppLayout() {
     await apiDeleteBook(bookId);
   }, []);
 
+  const openBook = useCallback((book: Book) => {
+    setCinematicBook(book);
+  }, []);
+
+  const handleCinematicComplete = useCallback(() => {
+    if (cinematicBook) {
+      navigate(`/read/${cinematicBook.id}`);
+      setCinematicBook(null);
+    }
+  }, [cinematicBook, navigate]);
+
   // ─── Auth gate ───
   if (loading) {
     return (
@@ -169,21 +203,20 @@ export function AppLayout() {
         value={{
           books,
           setBooks,
-          openAddModal: () => setIsModalOpen(true),
+          openAddModal: () => navigate('/new'),
           addBook,
           updateBook,
           removeBook,
           refreshLibrary,
           searchQuery,
           setSearchQuery,
+          openBook,
         }}
       >
         <div
-          className={`min-h-screen transition-colors ${
-            isReaderView ? '' : 'bg-[#F8FAFB]/45 dark:bg-[#0A1628]/45'
-          }`}
+          className="min-h-screen bg-[#fafafa]"
         >
-          {!isReaderView && (
+          {!isFullScreen && (
             <AirBooksNav
               onAddBook={() => setIsModalOpen(true)}
               isDarkMode={isDarkMode}
@@ -197,8 +230,8 @@ export function AppLayout() {
             />
           )}
 
-          <main className="max-w-5xl mx-auto px-6">
-            {libraryLoading && !isReaderView ? (
+          <main className={isFullScreen ? '' : 'max-w-5xl mx-auto px-6'}>
+            {libraryLoading && !isFullScreen ? (
               <div className="py-24 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 text-[#0F6FFF] animate-spin" />
               </div>
@@ -208,9 +241,22 @@ export function AppLayout() {
           </main>
 
           <AddBookModal
+            isOpen={false}
+            onClose={() => {}}
+            onAdded={addBook}
+          />
+
+          {/* New game-like Book Creator */}
+          <BookCreator
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            onAdded={addBook}
+            onCreated={addBook}
+          />
+
+          {/* Cinematic book-open transition */}
+          <BookOpenCinematic
+            book={cinematicBook}
+            onComplete={handleCinematicComplete}
           />
 
           <HandCursorOverlay />

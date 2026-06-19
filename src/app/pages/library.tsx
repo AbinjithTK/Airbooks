@@ -1,6 +1,8 @@
 import { BookShelf } from '../components/book-shelf';
-import { Library, Grid, Trash2, Search } from 'lucide-react';
+import { BookFanCarousel } from '../components/ui/book-fan-carousel';
+import { Library, Grid, Trash2, Search, Plus, Layers, PenLine, Upload } from 'lucide-react';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../components/app-layout';
 import { useNavigate } from 'react-router';
 import { hasPdf } from '../pdf-store';
@@ -20,20 +22,20 @@ import {
 
 const VIEW_KEY = 'airbooks-view';
 
-function getInitialView(): 'shelf' | 'grid' {
+function getInitialView(): 'shelf' | 'grid' | 'fan' {
   try {
     const saved = localStorage.getItem(VIEW_KEY);
-    if (saved === 'grid' || saved === 'shelf') return saved;
+    if (saved === 'grid' || saved === 'shelf' || saved === 'fan') return saved;
   } catch {
     // ignore
   }
-  return 'shelf';
+  return 'fan';
 }
 
 export function LibraryPage() {
-  const { books, openAddModal, removeBook, searchQuery } = useAppContext();
+  const { books, openAddModal, removeBook, searchQuery, openBook } = useAppContext();
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'shelf' | 'grid'>(getInitialView);
+  const [viewMode, setViewMode] = useState<'shelf' | 'grid' | 'fan'>(getInitialView);
 
   const categories = ['All', ...Array.from(new Set(books.map(b => b.category)))];
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -42,7 +44,7 @@ export function LibraryPage() {
   const [pendingDelete, setPendingDelete] = useState<Book | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const setView = (mode: 'shelf' | 'grid') => {
+  const setView = (mode: 'shelf' | 'grid' | 'fan') => {
     setViewMode(mode);
     try {
       localStorage.setItem(VIEW_KEY, mode);
@@ -81,8 +83,11 @@ export function LibraryPage() {
     }
   };
 
+  const [fabOpen, setFabOpen] = useState(false);
+
   return (
     <div className="py-8">
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div />
@@ -90,6 +95,12 @@ export function LibraryPage() {
         <div className="flex items-center gap-4">
           {/* View Toggle */}
           <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20">
+            <ViewToggleButton
+              active={viewMode === 'fan'}
+              onClick={() => setView('fan')}
+              icon={<Layers className="w-4 h-4" />}
+              label="Fan"
+            />
             <ViewToggleButton
               active={viewMode === 'shelf'}
               onClick={() => setView('shelf')}
@@ -129,18 +140,26 @@ export function LibraryPage() {
             Try a different title, author, or category.
           </p>
         </div>
+      ) : viewMode === 'fan' ? (
+        <BookFanCarousel
+          books={filteredBooks}
+          onOpenBook={(book) => openBook(book)}
+          onAddBook={openAddModal}
+          onWriteBook={(book) => navigate(`/write/${book.id}`)}
+        />
       ) : viewMode === 'shelf' ? (
         <BookShelf
           books={filteredBooks}
           onAddBook={query ? undefined : openAddModal}
           onRequestDelete={setPendingDelete}
+          onOpenBook={(book) => openBook(book)}
         />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
           {filteredBooks.map((book) => (
             <div
               key={book.id}
-              onClick={() => navigate(`/read/${book.id}`)}
+              onClick={() => openBook(book)}
               className="group rounded-lg shadow-xl cursor-pointer hover:scale-105 transition-transform relative overflow-hidden"
               style={{
                 aspectRatio: '4/5',

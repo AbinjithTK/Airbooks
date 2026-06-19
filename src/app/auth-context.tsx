@@ -31,6 +31,10 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = getSupabaseClient();
 
+  // ─── Dev bypass: skip real auth on localhost so you can see logged-in screens ───
+  const isDevBypass =
+    import.meta.env.DEV && window.location.search.includes('dev=true');
+
   // Capture everything from the URL synchronously at first render — before
   // Supabase's detectSessionInUrl can clear window.location.hash / search.
   const [urlState] = useState(() => {
@@ -302,6 +306,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = async () => {
     if (accessToken) await loadProfile(accessToken);
   };
+
+  // ─── Dev bypass: return a fake authenticated state ───
+  if (isDevBypass) {
+    const mockProfile: Profile = {
+      id: 'dev-user',
+      email: 'dev@airbooks.local',
+      name: 'Dev User',
+      bookCount: 5,
+    };
+    return (
+      <AuthContext.Provider
+        value={{
+          session: { access_token: 'dev-token' } as any,
+          profile: mockProfile,
+          accessToken: 'dev-token',
+          loading: false,
+          oauthError: null,
+          signInWithGoogle: async () => ({}),
+          signIn: async () => ({}),
+          signUp: async () => ({}),
+          signOut: async () => { window.location.search = ''; },
+          refreshProfile: async () => {},
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    );
+  }
 
   return (
     <AuthContext.Provider

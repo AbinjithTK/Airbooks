@@ -26,6 +26,10 @@ async function authHeader(): Promise<Record<string, string>> {
 
 /** Fetch the signed-in user's library from the server. */
 export async function listBooks(): Promise<Book[]> {
+  // Dev bypass: return sample books so the UI is visible locally
+  if (import.meta.env.DEV && window.location.search.includes('dev=true')) {
+    return DEV_SAMPLE_BOOKS;
+  }
   try {
     const res = await fetch(`${SERVER}/books`, { headers: await authHeader() });
     if (!res.ok) {
@@ -173,3 +177,75 @@ export function buildEmbedCode(shareId: string): string {
 export function isShareable(book: Book): boolean {
   return !!book.shareId || !!book.pdfUrl;
 }
+
+
+// ─── Dev sample books (only used when ?dev=true on localhost) ───
+const DEV_SAMPLE_BOOKS: Book[] = [
+  {
+    id: 'dev-1',
+    title: 'The Art of Clean Code',
+    author: 'Robert C. Martin',
+    coverColor: '#0F6FFF',
+    hasPdf: false,
+    pages: 320,
+    addedDate: '2025-03-15',
+    category: 'Technology',
+  },
+  {
+    id: 'dev-2',
+    title: 'Dune',
+    author: 'Frank Herbert',
+    coverColor: '#F59E0B',
+    hasPdf: true,
+    totalPdfPages: 412,
+    pages: 412,
+    addedDate: '2025-02-20',
+    category: 'Fiction',
+    skyboxTheme: 'sunset',
+  },
+  {
+    id: 'dev-3',
+    title: 'Sapiens',
+    author: 'Yuval Noah Harari',
+    coverColor: '#10B981',
+    hasPdf: false,
+    pages: 498,
+    addedDate: '2025-01-10',
+    category: 'History',
+    skyboxTheme: 'forest',
+  },
+  {
+    id: 'dev-4',
+    title: 'Deep Work',
+    author: 'Cal Newport',
+    coverColor: '#8B5CF6',
+    hasPdf: true,
+    totalPdfPages: 284,
+    pages: 284,
+    addedDate: '2025-04-01',
+    category: 'Non-Fiction',
+    skyboxTheme: 'library',
+  },
+  {
+    id: 'dev-5',
+    title: 'The Ocean at the End of the Lane',
+    author: 'Neil Gaiman',
+    coverColor: '#0EA5E9',
+    hasPdf: false,
+    pages: 181,
+    addedDate: '2025-05-12',
+    category: 'Fiction',
+    skyboxTheme: 'ocean',
+  },
+  {
+    id: 'dev-6',
+    title: 'Meditations',
+    author: 'Marcus Aurelius',
+    coverColor: '#6366F1',
+    hasPdf: false,
+    pages: 256,
+    addedDate: '2024-12-08',
+    category: 'Philosophy',
+    skyboxTheme: 'night-sky',
+  },
+];

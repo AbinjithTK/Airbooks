@@ -9,10 +9,19 @@ interface BookShelfProps {
   books: Book[];
   onAddBook?: () => void;
   onRequestDelete?: (book: Book) => void;
+  onOpenBook?: (book: Book) => void;
 }
 
-export function BookShelf({ books, onAddBook, onRequestDelete }: BookShelfProps) {
+export function BookShelf({ books, onAddBook, onRequestDelete, onOpenBook }: BookShelfProps) {
   const navigate = useNavigate();
+
+  const handleOpen = (book: Book) => {
+    if (onOpenBook) {
+      onOpenBook(book);
+    } else {
+      navigate(`/read/${book.id}`);
+    }
+  };
 
   // Build items: add-card first, then books
   type ShelfItem = { type: 'add' } | { type: 'book'; book: Book };
@@ -42,7 +51,7 @@ export function BookShelf({ books, onAddBook, onRequestDelete }: BookShelfProps)
                   book={item.book}
                   index={index}
                   shelfIndex={shelfIndex}
-                  onOpen={(id) => navigate(`/read/${id}`)}
+                  onOpen={() => handleOpen(item.book)}
                   onRequestDelete={onRequestDelete}
                 />
               )
@@ -382,7 +391,7 @@ interface BookCardProps {
   book: Book;
   index: number;
   shelfIndex: number;
-  onOpen: (id: string) => void;
+  onOpen: () => void;
   onRequestDelete?: (book: Book) => void;
 }
 
@@ -447,7 +456,7 @@ function BookCard({ book, index, shelfIndex, onOpen, onRequestDelete }: BookCard
             aspectRatio: '4/5',
             transformStyle: 'preserve-3d',
           }}
-          onClick={() => onOpen(book.id)}
+          onClick={() => onOpen()}
         >
           {/* Spine (left edge — 3D effect via skew) */}
           <div
@@ -593,7 +602,7 @@ function BookCard({ book, index, shelfIndex, onOpen, onRequestDelete }: BookCard
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpen(book.id);
+                  onOpen();
                 }}
                 whileHover={{ scale: 1.05, background: 'rgba(15,111,255,0.85)' }}
                 whileTap={{ scale: 0.97 }}

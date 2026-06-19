@@ -1,9 +1,10 @@
 import { X, Upload, BookOpen, FileText, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useRef } from 'react';
-import { Book } from '../types';
+import { Book, SkyboxTheme } from '../types';
 import { storePdfPersistent } from '../pdf-store';
 import { saveBook, uploadPdfToCloud } from '../supabase-books';
+import { SkyboxPicker } from './skybox-picker';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
@@ -20,6 +21,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
   const [category, setCategory] = useState('Fiction');
   const [pages, setPages] = useState(200);
   const [coverColor, setCoverColor] = useState('#0F6FFF');
+  const [skyboxTheme, setSkyboxTheme] = useState<SkyboxTheme | undefined>(undefined);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [pdfPageCount, setPdfPageCount] = useState<number>(0);
@@ -85,6 +87,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
       coverColor,
       hasPdf: false,
       totalPdfPages: pdfPageCount || undefined,
+      skyboxTheme,
     });
 
     if (!saved) {
@@ -128,6 +131,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
     setCategory('Fiction');
     setPages(200);
     setCoverColor('#0F6FFF');
+    setSkyboxTheme(undefined);
     setPdfFile(null);
     setPdfArrayBuffer(null);
     setPdfPageCount(0);
@@ -361,6 +365,9 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
                     ))}
                   </div>
                 </div>
+
+                {/* Skybox Ambient Theme */}
+                <SkyboxPicker value={skyboxTheme} onChange={setSkyboxTheme} />
 
                 {/* Cloud upload status */}
                 {cloudUploading && (
