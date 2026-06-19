@@ -75,6 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const { profile } = await res.json();
         setProfile(profile);
+        pendo.identify({
+          visitor: {
+            id: profile.id,
+            email: profile.email,
+            full_name: profile.name,
+            bookCount: profile.bookCount,
+          },
+        });
         return;
       }
       // 401/403 means the server no longer accepts this session (expired /
@@ -300,6 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // call failed — the local session is invalidated either way.
       setSession(null);
       setProfile(null);
+      pendo.clearSession();
     }
   };
 
