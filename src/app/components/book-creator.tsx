@@ -135,6 +135,15 @@ export function BookCreator({ isOpen, onClose, onCreated }: BookCreatorProps) {
       if (url) final = { ...saved, hasPdf: true, pdfUrl: url };
     }
     setSaving(false);
+    pendo.track("book_created_modal", {
+      has_pdf: !!pdfArrayBuffer,
+      category,
+      cover_color: coverColor,
+      page_count: pdfPageCount || pages,
+      has_skybox_theme: !!skyboxTheme,
+      skybox_theme: skyboxTheme || "none",
+      creation_method: "modal",
+    });
     onCreated(final);
     reset();
     setActiveSkybox(null);

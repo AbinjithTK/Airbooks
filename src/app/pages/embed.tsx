@@ -34,6 +34,12 @@ export function EmbedPage() {
         if (!buf) throw new Error('Could not fetch PDF');
         setPdfBuffer(buf);
         setStatus('');
+        pendo.track("embedded_book_viewed", {
+          share_id: shareId,
+          book_title: bookMeta.title,
+          start_page: startPage,
+          total_pages: bookMeta.totalPages,
+        });
       } catch (e) {
         setError(`Failed to load PDF: ${e}`);
       }

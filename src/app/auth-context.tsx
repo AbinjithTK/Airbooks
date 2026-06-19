@@ -256,6 +256,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: error.message };
     if (!data?.url) return { error: 'Could not start Google sign-in.' };
 
+    pendo.track("user_signed_in_google", {
+      auth_method: "google",
+      in_iframe: inIframe,
+    });
+
     // Navigating window.top is allowed cross-origin (only *reading* it is
     // blocked), so this safely breaks out of the iframe. Fall back to the
     // current window if top isn't available.
@@ -275,6 +280,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: error.message };
+      pendo.track("user_signed_in", {
+        auth_method: "email",
+      });
       return {};
     } catch (e) {
       return { error: `Network error while signing in: ${e}` };
@@ -292,6 +300,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await res.json().catch(() => ({ error: 'Signup failed.' }));
         return { error: error ?? 'Signup failed.' };
       }
+      pendo.track("user_signed_up", {
+        auth_method: "email",
+        has_name: !!name.trim(),
+      });
       return await signIn(email, password);
     } catch (e) {
       return { error: `Network error: ${e}` };
@@ -299,6 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    pendo.track("user_signed_out");
     try {
       await supabase.auth.signOut();
     } catch (e) {

@@ -120,6 +120,14 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
     }
 
     setCloudUploading(false);
+    pendo.track("book_added_via_modal", {
+      has_pdf: !!pdfArrayBuffer,
+      category,
+      cover_color: coverColor,
+      page_count: pdfPageCount || pages,
+      file_size_mb: pdfFile ? parseFloat((pdfFile.size / 1024 / 1024).toFixed(2)) : 0,
+      has_skybox_theme: !!skyboxTheme,
+    });
     onAdded(finalBook);
     resetForm();
     onClose();

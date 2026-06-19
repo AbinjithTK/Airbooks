@@ -65,6 +65,12 @@ export function CreateBookPage() {
         if (info.Title && !title) setTitle(info.Title);
         if (info.Author && !author) setAuthor(info.Author);
       }
+      pendo.track("pdf_uploaded", {
+        file_size_mb: parseFloat((file.size / 1024 / 1024).toFixed(2)),
+        page_count: pdf.numPages,
+        has_title_metadata: !!(meta?.info as Record<string, string>)?.Title,
+        has_author_metadata: !!(meta?.info as Record<string, string>)?.Author,
+      });
     } catch { setError('Could not read PDF.'); } finally { setUploading(false); }
   };
 
@@ -78,6 +84,14 @@ export function CreateBookPage() {
       const url = await uploadPdfToCloud(saved.id, pdfArrayBuffer);
       if (url) final = { ...saved, hasPdf: true, pdfUrl: url };
     }
+    pendo.track("book_created", {
+      has_pdf: !!pdfArrayBuffer,
+      category,
+      cover_color: coverColor,
+      page_count: pdfPageCount || pages,
+      has_skybox_theme: !!skyboxTheme,
+      skybox_theme: skyboxTheme || "none",
+    });
     setSaving(false); addBook(final); setActiveSkybox(null); navigate('/');
   };
 
