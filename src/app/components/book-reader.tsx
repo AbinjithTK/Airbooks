@@ -412,11 +412,25 @@ export function BookReader() {
       <BookReaderCore
         book={book}
         onShareClick={() => setShareOpen(true)}
-        onThemeChange={themes => updateBook({ ...book, ...themes })}
+        onThemeChange={themes => {
+          pendo.track("reader_theme_changed", {
+            book_id: book.id,
+            flip_theme: themes.flipTheme || book.flipTheme || "classic",
+            reader_theme: themes.readerTheme || book.readerTheme || "white",
+            theme_type_changed: themes.flipTheme ? "flip" : "reader",
+          });
+          updateBook({ ...book, ...themes });
+        }}
       />
       <ReaderThemePicker
         bookSkybox={book.skyboxTheme}
-        onSelect={(theme: SkyboxTheme) => updateBook({ ...book, skyboxTheme: theme })}
+        onSelect={(theme: SkyboxTheme) => {
+          pendo.track("skybox_theme_changed", {
+            book_id: book.id,
+            skybox_theme: theme,
+          });
+          updateBook({ ...book, skyboxTheme: theme });
+        }}
       />
       {shareOpen && (
         <ShareModal
@@ -470,6 +484,11 @@ function ShareModal({ book, setBooks, onClose }: ShareModalProps) {
       const newShareId = await shareBook(book.id);
       if (!newShareId) { setUploadError('Could not publish share. Please try again.'); setUploading(false); return; }
       setBooks(prev => prev.map(b => b.id === book.id ? { ...b, shareId: newShareId } : b));
+      pendo.track("book_shared", {
+        book_id: book.id,
+        had_existing_pdf_url: !!book.pdfUrl,
+        share_id: newShareId,
+      });
     } catch (e) {
       setUploadError(`Error: ${e}`);
     }
@@ -551,7 +570,13 @@ function ShareModal({ book, setBooks, onClose }: ShareModalProps) {
                       onClick={e => (e.target as HTMLInputElement).select()}
                     />
                     <button
-                      onClick={() => copy(shareUrl, setCopiedLink)}
+                      onClick={() => {
+                        copy(shareUrl, setCopiedLink);
+                        pendo.track("share_link_copied", {
+                          book_id: book.id,
+                          share_id: shareId,
+                        });
+                      }}
                       className="px-4 py-2.5 bg-[#0F6FFF] text-white rounded-xl text-sm font-medium hover:bg-[#0A5FE8] transition-colors flex items-center gap-1.5 flex-shrink-0"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -578,7 +603,13 @@ function ShareModal({ book, setBooks, onClose }: ShareModalProps) {
                       onClick={e => (e.target as HTMLTextAreaElement).select()}
                     />
                     <button
-                      onClick={() => copy(embedCode, setCopiedEmbed)}
+                      onClick={() => {
+                        copy(embedCode, setCopiedEmbed);
+                        pendo.track("embed_code_copied", {
+                          book_id: book.id,
+                          share_id: shareId,
+                        });
+                      }}
                       className="absolute top-2 right-2 px-3 py-1.5 bg-[#8B5CF6] text-white rounded-lg text-xs font-medium hover:bg-[#7C3AED] transition-colors flex items-center gap-1"
                     >
                       {copiedEmbed ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}

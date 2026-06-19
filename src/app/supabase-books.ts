@@ -104,6 +104,10 @@ export async function uploadPdfToCloud(
       return null;
     }
     const { pdfUrl } = await res.json();
+    pendo.track("pdf_cloud_upload_completed", {
+      book_id: bookId,
+      success: !!pdfUrl,
+    });
     return pdfUrl ?? null;
   } catch (e) {
     console.log('PDF cloud upload error:', e);

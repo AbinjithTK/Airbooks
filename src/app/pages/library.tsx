@@ -1,7 +1,7 @@
 import { BookShelf } from '../components/book-shelf';
 import { BookFanCarousel } from '../components/ui/book-fan-carousel';
 import { Library, Grid, Trash2, Search, Plus, Layers, PenLine, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../components/app-layout';
 import { useNavigate } from 'react-router';
@@ -66,6 +66,21 @@ export function LibraryPage() {
     );
   });
 
+  // Debounced search tracking
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    const timer = setTimeout(() => {
+      pendo.track("library_searched", {
+        query: q,
+        results_count: filteredBooks.length,
+        total_books: books.length,
+        selected_category: selectedCategory,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedCategory, filteredBooks.length, books.length]);
+
   // Compute book counts per category
   const bookCounts: Record<string, number> = { All: books.length };
   books.forEach(b => {
@@ -77,6 +92,11 @@ export function LibraryPage() {
     setDeleting(true);
     try {
       await removeBook(pendingDelete.id);
+      pendo.track("book_deleted", {
+        book_id: pendingDelete.id,
+        has_pdf: !!pendingDelete.hasPdf,
+        category: pendingDelete.category,
+      });
     } finally {
       setDeleting(false);
       setPendingDelete(null);

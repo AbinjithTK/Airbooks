@@ -54,6 +54,12 @@ export function WriterPage() {
 
   const handleSave = () => {
     setSaved(true);
+    pendo.track("writer_content_saved", {
+      book_id: id || "new",
+      word_count: wordCount,
+      char_count: charCount,
+      view_mode: viewMode,
+    });
     // Would persist to server here
   };
 

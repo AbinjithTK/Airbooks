@@ -33,6 +33,12 @@ export function SharePage() {
         const buf = await res.arrayBuffer();
         setPdfBuffer(buf);
         setStatus('');
+        pendo.track("shared_book_viewed", {
+          share_id: shareId,
+          book_title: bookMeta.title,
+          book_author: bookMeta.author,
+          total_pages: bookMeta.totalPages,
+        });
       } catch (e) {
         setError(`Failed to load PDF: ${e}`);
       }

@@ -169,6 +169,13 @@ export function AppLayout() {
   }, []);
 
   const openBook = useCallback((book: Book) => {
+    pendo.track("book_opened", {
+      book_id: book.id,
+      category: book.category,
+      has_pdf: !!book.hasPdf,
+      has_skybox_theme: !!book.skyboxTheme,
+      page_count: book.pages,
+    });
     setCinematicBook(book);
   }, []);
 
