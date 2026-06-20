@@ -36,7 +36,7 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
       {/* Floating card with 3D perspective */}
       <motion.div
         initial={{ opacity: 0, y: 40, rotateX: 8 }}

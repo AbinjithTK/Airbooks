@@ -5,9 +5,10 @@ import {
   Upload, FileText, CheckCircle2, ChevronRight, ChevronLeft,
   BookOpen, Palette, Sparkles, Eye, Loader2, AlertCircle, ArrowLeft, X,
 } from 'lucide-react';
-import { Book, SkyboxTheme } from '../types';
+import { Book, SkyboxTheme, CoverImageTransform } from '../types';
 import { Book3DCanvas } from '../components/book-3d-canvas';
 import { Icon3D } from '../components/ui/icon-3d';
+import { CoverEditor } from '../components/cover-editor';
 import { skyboxThemes, skyboxThemeOrder } from '../themes/skybox-themes';
 import { useWorld } from '../world/world-provider';
 import { useAppContext } from '../components/app-layout';
@@ -35,6 +36,10 @@ export function CreateBookPage() {
   const [category, setCategory] = useState('Fiction');
   const [pages, setPages] = useState(200);
   const [coverColor, setCoverColor] = useState('#0F6FFF');
+  const [coverImage, setCoverImage] = useState<string | undefined>(undefined);
+  const [coverTransform, setCoverTransform] = useState<CoverImageTransform>({ x: 0, y: 0, scale: 1, rotation: 0 });
+  const [backCoverImage, setBackCoverImage] = useState<string | undefined>(undefined);
+  const [backCoverTransform, setBackCoverTransform] = useState<CoverImageTransform>({ x: 0, y: 0, scale: 1, rotation: 0 });
   const [skyboxTheme, setSkyboxThemeState] = useState<SkyboxTheme | undefined>(undefined);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
@@ -70,7 +75,7 @@ export function CreateBookPage() {
 
   const handleCreate = async () => {
     setSaving(true); setError(null);
-    const saved = await saveBook({ title, author, category, pages: pdfPageCount || pages, coverColor, hasPdf: false, totalPdfPages: pdfPageCount || undefined, skyboxTheme });
+    const saved = await saveBook({ title, author, category, pages: pdfPageCount || pages, coverColor, hasPdf: false, totalPdfPages: pdfPageCount || undefined, skyboxTheme, coverImage, coverImageTransform: coverTransform, backCoverImage, backCoverImageTransform: backCoverTransform });
     if (!saved) { setSaving(false); setError('Could not save.'); return; }
     let final: Book = saved;
     if (pdfArrayBuffer) {
@@ -87,7 +92,7 @@ export function CreateBookPage() {
     <div className="fixed inset-0 z-30 bg-[#fafafa]">
       {/* ── Full-screen 3D Book Canvas ── */}
       <div className="absolute inset-0">
-        <Book3DCanvas color={coverColor} title={title} author={author} category={category} step={step} interactive zoom={zoom} skyboxTheme={skyboxTheme} />
+        <Book3DCanvas color={coverColor} title={title} author={author} category={category} step={step} interactive zoom={zoom} skyboxTheme={skyboxTheme} coverImage={coverImage} coverImageTransform={coverTransform} />
       </div>
 
       {/* ── Back Button (top-left, large) ── */}
@@ -102,10 +107,10 @@ export function CreateBookPage() {
       </motion.button>
 
       {/* ── Step Content (bottom overlay — large floating panel, no sidebar) ── */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-6">
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-3 sm:p-6">
         <motion.div
           layout
-          className="max-w-2xl mx-auto rounded-3xl p-6 bg-white/95 backdrop-blur-xl shadow-2xl border border-gray-200/60"
+          className="max-w-2xl mx-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-white/95 backdrop-blur-xl shadow-2xl border border-gray-200/60"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -126,7 +131,8 @@ export function CreateBookPage() {
               )}
               {step === 1 && <StepDetails {...{ title, setTitle, author, setAuthor, category, setCategory, pages, setPages, pdfPageCount }} />}
               {step === 2 && <StepTheme {...{ coverColor, setCoverColor, skyboxTheme, setSkyboxTheme }} />}
-              {step === 3 && <StepPreview title={title} author={author} category={category} pages={pdfPageCount || pages} coverColor={coverColor} skyboxTheme={skyboxTheme} hasPdf={!!pdfFile} />}
+              {step === 3 && <CoverEditor coverColor={coverColor} coverImage={coverImage} transform={coverTransform} onImageChange={setCoverImage} onTransformChange={setCoverTransform} backCoverImage={backCoverImage} backTransform={backCoverTransform} onBackImageChange={setBackCoverImage} onBackTransformChange={setBackCoverTransform} />}
+              {step === 4 && <StepPreview title={title} author={author} category={category} pages={pdfPageCount || pages} coverColor={coverColor} skyboxTheme={skyboxTheme} hasPdf={!!pdfFile} coverImage={coverImage} />}
             </motion.div>
           </AnimatePresence>
 
@@ -140,8 +146,8 @@ export function CreateBookPage() {
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
             {/* Step dots */}
             <div className="flex items-center gap-2">
-              {[0,1,2,3].map(i => (
-                <button key={i} onClick={() => setStep(i)} className={`w-3 h-3 rounded-full cursor-pointer transition-all ${i === step ? 'bg-blue-500 scale-125' : i < step ? 'bg-blue-300' : 'bg-gray-200'}`} />
+              {[0,1,2,3,4].map(i => (
+                <button key={i} onClick={() => setStep(i)} className={`w-3 h-3 rounded-full cursor-pointer transition-all ${i === step ? 'scale-125' : ''}`} style={{ background: i === step ? '#4285F4' : i < step ? '#34A853' : '#e5e7eb' }} />
               ))}
             </div>
 
@@ -155,12 +161,12 @@ export function CreateBookPage() {
                   <ChevronLeft className="w-4 h-4" /> Back
                 </motion.button>
               )}
-              {step < 3 ? (
+              {step < 4 ? (
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                   onClick={() => setStep(s => s + 1)}
                   disabled={!canNext()}
                   className="flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold text-sm text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', boxShadow: '0 4px 14px -3px rgba(59,130,246,0.4)' }}
+                  style={{ background: 'linear-gradient(135deg, #4285F4, #1A73E8)', boxShadow: '0 4px 14px -3px rgba(66,133,244,0.4)' }}
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </motion.button>
@@ -169,7 +175,7 @@ export function CreateBookPage() {
                   onClick={handleCreate}
                   disabled={saving || !title.trim() || !author.trim()}
                   className="flex items-center gap-2 px-7 py-3 rounded-2xl font-semibold text-sm text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 4px 14px -3px rgba(16,185,129,0.4)' }}
+                  style={{ background: 'linear-gradient(135deg, #34A853, #1E8E3E)', boxShadow: '0 4px 14px -3px rgba(52,168,83,0.4)' }}
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                   {saving ? 'Creating...' : 'Create Book'}
@@ -295,7 +301,7 @@ function StepTheme({ coverColor, setCoverColor, skyboxTheme, setSkyboxTheme }: a
   );
 }
 
-function StepPreview({ title, author, category, pages, coverColor, skyboxTheme, hasPdf }: any) {
+function StepPreview({ title, author, category, pages, coverColor, skyboxTheme, hasPdf, coverImage }: any) {
   const theme = skyboxTheme ? skyboxThemes[skyboxTheme] : null;
   return (
     <div>
@@ -306,6 +312,7 @@ function StepPreview({ title, author, category, pages, coverColor, skyboxTheme, 
         <Stat label="Category" value={category} />
         <Stat label="Pages" value={String(pages)} />
         <Stat label="PDF" value={hasPdf ? '✓ Yes' : 'None'} />
+        <Stat label="Cover Image" value={coverImage ? '✓ Yes' : 'None'} />
         <Stat label="Ambience" value={theme ? `${theme.icon} ${theme.name}` : 'Default'} />
       </div>
     </div>

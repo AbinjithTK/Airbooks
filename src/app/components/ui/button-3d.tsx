@@ -23,13 +23,13 @@ const VARIANTS: Record<Button3DVariant, {
   glow: string;
 }> = {
   primary: {
-    bg: 'linear-gradient(145deg, #3B8BFF 0%, #0F6FFF 40%, #0050CC 100%)',
-    shadow: '0 6px 20px -4px rgba(15,111,255,0.5), 0 3px 6px -2px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.15)',
-    shadowHover: '0 10px 30px -4px rgba(15,111,255,0.6), 0 4px 10px -2px rgba(0,0,0,0.25), inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.12)',
-    shadowActive: '0 2px 8px -2px rgba(15,111,255,0.4), 0 1px 3px rgba(0,0,0,0.2), inset 0 2px 6px rgba(0,0,0,0.2), inset 0 -1px 1px rgba(255,255,255,0.1)',
+    bg: 'linear-gradient(145deg, #4285F4 0%, #1A73E8 50%, #1557B0 100%)',
+    shadow: '0 6px 20px -4px rgba(66,133,244,0.5), 0 3px 6px -2px rgba(0,0,0,0.1), inset 0 1px 2px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.08)',
+    shadowHover: '0 10px 30px -4px rgba(66,133,244,0.6), 0 4px 10px -2px rgba(0,0,0,0.15), inset 0 1px 2px rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.06)',
+    shadowActive: '0 2px 8px -2px rgba(66,133,244,0.4), 0 1px 3px rgba(0,0,0,0.1), inset 0 2px 6px rgba(0,0,0,0.12), inset 0 -1px 1px rgba(255,255,255,0.06)',
     text: '#FFFFFF',
-    border: '1px solid rgba(255,255,255,0.15)',
-    glow: 'rgba(59,139,255,0.4)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    glow: 'rgba(66,133,244,0.3)',
   },
   secondary: {
     bg: 'linear-gradient(145deg, #FFFFFF 0%, #F1F5F9 40%, #E2E8F0 100%)',

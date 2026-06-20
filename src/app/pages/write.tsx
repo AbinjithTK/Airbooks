@@ -53,8 +53,11 @@ export function WriterPage() {
   }, []);
 
   const handleSave = () => {
-    setSaved(true);
-    // Would persist to server here
+    // Navigate to create page with the written content as a new book
+    // Store content in sessionStorage so create page can pick it up
+    sessionStorage.setItem('airbooks-written-content', content);
+    sessionStorage.setItem('airbooks-written-title', title);
+    navigate('/create');
   };
 
   const execCommand = (cmd: string, value?: string) => {

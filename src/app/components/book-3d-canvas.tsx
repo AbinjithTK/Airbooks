@@ -12,6 +12,8 @@ interface Book3DCanvasProps {
   zoom?: number;
   interactive?: boolean;
   skyboxTheme?: SkyboxTheme;
+  coverImage?: string;
+  coverImageTransform?: { x: number; y: number; scale: number; rotation: number };
 }
 
 /* ─── Step-based camera targets (car customizer feel) ─── */
@@ -36,6 +38,8 @@ export function Book3DCanvas({
   zoom = 1,
   interactive = true,
   skyboxTheme,
+  coverImage,
+  coverImageTransform,
 }: Book3DCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctrlRef = useRef<BookSceneController | null>(null);
@@ -62,6 +66,7 @@ export function Book3DCanvas({
   useEffect(() => { ctrlRef.current?.setStep(step); }, [step]);
   useEffect(() => { ctrlRef.current?.setZoom(zoom); }, [zoom]);
   useEffect(() => { ctrlRef.current?.setEnvironment(skyboxTheme ?? null); }, [skyboxTheme]);
+  useEffect(() => { ctrlRef.current?.setCoverImage(coverImage, coverImageTransform); }, [coverImage, coverImageTransform]);
 
   // Pointer orbit
   const dragging = useRef(false);
@@ -115,6 +120,7 @@ interface BookSceneController {
   setStep(step: number): void;
   setZoom(z: number): void;
   setEnvironment(theme: string | null): void;
+  setCoverImage(url: string | undefined, transform?: { x: number; y: number; scale: number; rotation: number }): void;
   orbit(dx: number, dy: number): void;
   adjustZoom(dz: number): void;
   dispose(): void;
@@ -126,8 +132,7 @@ function createBookScene(canvas: HTMLCanvasElement): BookSceneController {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = false;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
@@ -256,7 +261,7 @@ function createBookScene(canvas: HTMLCanvasElement): BookSceneController {
     envMapIntensity: 0.8,
   });
   const textPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(W * 0.85, H * 0.85),
+    new THREE.PlaneGeometry(W * 0.95, H * 0.95),
     textMat,
   );
   textPlane.position.z = D / 2 + 0.022;
@@ -415,6 +420,45 @@ function createBookScene(canvas: HTMLCanvasElement): BookSceneController {
       const envGroup = buildEnvironment3D(theme as string);
       envGroup.name = '__env__';
       scene.add(envGroup);
+    },
+    setCoverImage(url, transform) {
+      const ctx = textCanvas.getContext('2d')!;
+      if (!url) {
+        // Clear image, keep text
+        renderText('', '', '');
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.clearRect(0, 0, 512, 712);
+        ctx.save();
+        // Clip to canvas bounds so image never extends outside the book face
+        ctx.beginPath();
+        ctx.rect(0, 0, 512, 712);
+        ctx.clip();
+        // Apply transforms
+        ctx.translate(256, 356);
+        const t = transform || { x: 0, y: 0, scale: 1, rotation: 0 };
+        ctx.translate(t.x * 2.56, t.y * 3.56);
+        ctx.rotate((t.rotation * Math.PI) / 180);
+        ctx.scale(t.scale, t.scale);
+        // Draw image centered and covering the full area
+        const aspect = img.width / img.height;
+        const canvasAspect = 512 / 712;
+        let drawW, drawH;
+        if (aspect > canvasAspect) {
+          drawH = 712;
+          drawW = drawH * aspect;
+        } else {
+          drawW = 512;
+          drawH = drawW / aspect;
+        }
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+        textTex.needsUpdate = true;
+      };
+      img.src = url;
     },
     orbit(dx, dy) {
       targetRY += dx;

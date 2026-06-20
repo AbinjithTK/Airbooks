@@ -22,8 +22,8 @@ export function ChoicePage() {
         </Button3D>
       </div>
 
-      {/* Two choices side by side — no labels, just 3D models */}
-      <div className="flex items-center gap-16 md:gap-24">
+      {/* Two choices — stack on mobile, side by side on desktop */}
+      <div className="flex flex-col sm:flex-row items-center gap-10 sm:gap-16 md:gap-24">
         {/* ─── Write a Book ─── */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}

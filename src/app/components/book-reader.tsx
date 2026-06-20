@@ -12,6 +12,7 @@ import { flipThemes, FlipThemeConfig } from '../themes/flip-themes';
 import { readerThemes, ReaderThemeConfig } from '../themes/reader-themes';
 import { ReaderThemePicker } from './reader-theme-picker';
 import { useWorld } from '../world/world-provider';
+import { BookReader3D } from './book-reader-3d';
 import { AnimatePresence, motion } from 'motion/react';
 import { buildShareUrl, buildEmbedCode, uploadPdfToCloud, shareBook } from '../supabase-books';
 import { FlipBook, FlipBookHandle, PAGE_WIDTH, PAGE_HEIGHT } from './flip-book';
@@ -369,7 +370,7 @@ export function BookReaderCore({
 }
 
 /* ─────────────────────────────────────────────────────────────
-   BookReader — route wrapper
+   BookReader — route wrapper (now uses 3D reader)
    ───────────────────────────────────────────────────────────── */
 
 export function BookReader() {
@@ -377,8 +378,8 @@ export function BookReader() {
   const { id } = useParams();
   const navigate = useNavigate();
   const book = books.find(b => b.id === id);
-  const [shareOpen, setShareOpen] = useState(false);
-  const { setActiveSkybox } = useWorld();
+  const { setActiveSkybox, activeSkybox } = useWorld();
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
 
   // Apply the book's skybox theme when opening it
   useEffect(() => {
@@ -388,18 +389,21 @@ export function BookReader() {
     return () => { setActiveSkybox(null); };
   }, [book?.skyboxTheme, setActiveSkybox]);
 
+  // Load PDF buffer
+  useEffect(() => {
+    if (!book) return;
+    getPdfAsync(book.id).then(buf => {
+      if (buf) setPdfBuffer(buf);
+    });
+  }, [book?.id]);
+
   if (!book) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFB] dark:bg-[#0A1628]">
+      <div className="min-h-screen flex items-center justify-center bg-[#fafafa]">
         <div className="text-center">
           <BookOpen className="w-16 h-16 text-[#0F6FFF] mx-auto mb-4" />
-          <h2 className="text-2xl font-semibold text-[#1A2332] dark:text-[#F1F5F9] mb-4">
-            Book not found
-          </h2>
-          <button
-            onClick={() => navigate('/')}
-            className="px-6 py-3 bg-gradient-to-r from-[#0F6FFF] to-[#0EA5E9] text-white rounded-xl"
-          >
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Book not found</h2>
+          <button onClick={() => navigate('/')} className="px-6 py-3 rounded-2xl font-semibold text-white text-sm cursor-pointer" style={{ background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)' }}>
             Back to Library
           </button>
         </div>
@@ -411,21 +415,46 @@ export function BookReader() {
     <>
       <BookReaderCore
         book={book}
-        onShareClick={() => setShareOpen(true)}
+        pdfBuffer={pdfBuffer}
+        onShareClick={() => {}}
         onThemeChange={themes => updateBook({ ...book, ...themes })}
       />
       <ReaderThemePicker
         bookSkybox={book.skyboxTheme}
-        onSelect={(theme: SkyboxTheme) => updateBook({ ...book, skyboxTheme: theme })}
+        onSelect={(theme: SkyboxTheme) => {
+          updateBook({ ...book, skyboxTheme: theme });
+          setActiveSkybox(theme);
+        }}
       />
-      {shareOpen && (
-        <ShareModal
-          book={book}
-          setBooks={setBooks}
-          onClose={() => setShareOpen(false)}
-        />
-      )}
     </>
+  );
+}
+
+/** Load pages for a book — returns array of text strings (one per page) */
+async function loadBookPages(book: Book): Promise<string[]> {
+  // If book has PDF, try to extract text from it
+  if (book.hasPdf) {
+    try {
+      const buffer = await getPdfAsync(book.id);
+      if (buffer) {
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const pages: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const text = content.items.map((item: any) => item.str).join(' ');
+          pages.push(text || `Page ${i}`);
+        }
+        return pages;
+      }
+    } catch (e) {
+      console.warn('Failed to load PDF pages:', e);
+    }
+  }
+  // Fallback: generate placeholder pages
+  const count = book.totalPdfPages || book.pages || 10;
+  return Array.from({ length: Math.min(count, 20) }, (_, i) =>
+    i === 0 ? `${book.title}\n\nby ${book.author}\n\n${book.category}` : `Page ${i + 1}\n\nContent for this page will appear here when a PDF is uploaded.`
   );
 }
 

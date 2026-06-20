@@ -15,28 +15,28 @@ interface Icon3DProps extends MotionProps {
 
 const COLORS: Record<Icon3DColor, { bg: string; glow: string; specular: string }> = {
   blue: {
-    bg: 'linear-gradient(145deg, #5BA3FF 0%, #0F6FFF 40%, #0050CC 100%)',
-    glow: 'rgba(15,111,255,0.4)',
+    bg: 'linear-gradient(145deg, #4285F4 0%, #1A73E8 40%, #1557B0 100%)',
+    glow: 'rgba(66,133,244,0.4)',
     specular: 'rgba(180,220,255,0.6)',
   },
   amber: {
-    bg: 'linear-gradient(145deg, #FFD666 0%, #F59E0B 40%, #D97706 100%)',
-    glow: 'rgba(245,158,11,0.4)',
+    bg: 'linear-gradient(145deg, #FBBC05 0%, #F9A825 40%, #F57F17 100%)',
+    glow: 'rgba(251,188,5,0.4)',
     specular: 'rgba(255,240,180,0.6)',
   },
   green: {
-    bg: 'linear-gradient(145deg, #6EE7A0 0%, #10B981 40%, #059669 100%)',
-    glow: 'rgba(16,185,129,0.4)',
-    specular: 'rgba(180,255,220,0.6)',
+    bg: 'linear-gradient(145deg, #34A853 0%, #1E8E3E 40%, #137333 100%)',
+    glow: 'rgba(52,168,83,0.4)',
+    specular: 'rgba(180,255,200,0.6)',
   },
   purple: {
-    bg: 'linear-gradient(145deg, #A78BFA 0%, #7C3AED 40%, #5B21B6 100%)',
-    glow: 'rgba(124,58,237,0.4)',
-    specular: 'rgba(200,180,255,0.6)',
+    bg: 'linear-gradient(145deg, #A142F4 0%, #8430CE 40%, #6A1B9A 100%)',
+    glow: 'rgba(161,66,244,0.4)',
+    specular: 'rgba(220,180,255,0.6)',
   },
   rose: {
-    bg: 'linear-gradient(145deg, #FDA4AF 0%, #F43F5E 40%, #BE123C 100%)',
-    glow: 'rgba(244,63,94,0.4)',
+    bg: 'linear-gradient(145deg, #FF4081 0%, #EA4335 40%, #C62828 100%)',
+    glow: 'rgba(234,67,53,0.4)',
     specular: 'rgba(255,200,210,0.6)',
   },
   cyan: {

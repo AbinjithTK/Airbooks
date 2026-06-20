@@ -90,9 +90,8 @@ export function AppLayout() {
     if (isReaderView) {
       const bookId = location.pathname.split('/read/')[1];
       const book = books.find(b => b.id === bookId);
-      if (book?.skyboxTheme) {
-        setActiveSkybox(book.skyboxTheme);
-      }
+      // Always set a theme — use book's choice or default to 'library'
+      setActiveSkybox(book?.skyboxTheme ?? 'library');
     } else {
       setActiveSkybox(null);
     }
@@ -214,7 +213,7 @@ export function AppLayout() {
         }}
       >
         <div
-          className="min-h-screen bg-[#fafafa]"
+          className={`min-h-screen ${isReaderView ? 'bg-transparent' : 'bg-white dark:bg-[#1a1a1a]'}`}
         >
           {!isFullScreen && (
             <AirBooksNav
@@ -230,7 +229,7 @@ export function AppLayout() {
             />
           )}
 
-          <main className={isFullScreen ? '' : 'max-w-5xl mx-auto px-6'}>
+          <main className={isFullScreen ? '' : 'max-w-5xl mx-auto px-3 sm:px-6'}>
             {libraryLoading && !isFullScreen ? (
               <div className="py-24 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 text-[#0F6FFF] animate-spin" />

@@ -1,9 +1,9 @@
 import { Book } from '../types';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { BookOpen, FileText, Eye, Info, Plus, Trash2 } from 'lucide-react';
-import { hasPdf } from '../pdf-store';
-import { useState } from 'react';
+import { BookOpen, Eye, Plus, Trash2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Book3DCanvas } from './book-3d-canvas';
 
 interface BookShelfProps {
   books: Book[];
@@ -16,377 +16,125 @@ export function BookShelf({ books, onAddBook, onRequestDelete, onOpenBook }: Boo
   const navigate = useNavigate();
 
   const handleOpen = (book: Book) => {
-    if (onOpenBook) {
-      onOpenBook(book);
-    } else {
-      navigate(`/read/${book.id}`);
-    }
+    if (onOpenBook) onOpenBook(book);
+    else navigate(`/read/${book.id}`);
   };
 
-  // Build items: add-card first, then books
   type ShelfItem = { type: 'add' } | { type: 'book'; book: Book };
   const items: ShelfItem[] = [
     ...(onAddBook ? [{ type: 'add' as const }] : []),
     ...books.map(book => ({ type: 'book' as const, book })),
   ];
 
-  // Group into shelves of 4
+  // Responsive: 2 per shelf on mobile, 3 tablet, 4 desktop
+  const perShelf = typeof window !== 'undefined' && window.innerWidth < 640 ? 2 : window.innerWidth < 768 ? 3 : 4;
   const shelves: ShelfItem[][] = [];
-  for (let i = 0; i < items.length; i += 4) {
-    shelves.push(items.slice(i, i + 4));
+  for (let i = 0; i < items.length; i += perShelf) {
+    shelves.push(items.slice(i, i + perShelf));
   }
 
   return (
-    <div className="space-y-4">
-      {shelves.map((shelf, shelfIndex) => (
-        <div key={shelfIndex} className="relative">
-          {/* Items row — sit ON the shelf */}
-          <div className="grid grid-cols-4 gap-8 px-10 pb-0 relative z-10">
-            {shelf.map((item, index) =>
+    <div className="space-y-6">
+      {shelves.map((shelf, si) => (
+        <div key={si} className="relative">
+          {/* Books row */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 px-4 sm:px-6 md:px-8 pb-2 relative z-10">
+            {shelf.map((item, idx) =>
               item.type === 'add' ? (
-                <AddBookCard key="__add__" index={index} shelfIndex={shelfIndex} onClick={onAddBook!} />
+                <AddCard key="__add__" index={idx} shelfIndex={si} onClick={onAddBook!} />
               ) : (
                 <BookCard
                   key={item.book.id}
                   book={item.book}
-                  index={index}
-                  shelfIndex={shelfIndex}
+                  index={idx}
+                  shelfIndex={si}
                   onOpen={() => handleOpen(item.book)}
                   onRequestDelete={onRequestDelete}
                 />
               )
             )}
           </div>
-
-          {/* ── 3D Protruding Shelf ── */}
+          {/* Shelf bar */}
           <Shelf3D />
         </div>
       ))}
 
       {books.length === 0 && !onAddBook && (
         <div className="text-center py-32">
-          <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-[#0F6FFF]/20 to-[#0EA5E9]/20 rounded-3xl flex items-center justify-center">
-            <BookOpen className="w-12 h-12 text-[#0F6FFF] dark:text-[#3B82F6]" />
-          </div>
-          <h3 className="text-2xl font-semibold text-[#1A2332] dark:text-[#F1F5F9] mb-2">
-            Your library is empty
-          </h3>
-          <p className="text-[#64748B] dark:text-[#94A3B8]">
-            Add your first book to get started
-          </p>
+          <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Your library is empty</h3>
+          <p className="text-gray-400">Add your first book to get started</p>
         </div>
       )}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   3D Shelf Component
-   ───────────────────────────────────────────── */
+/* ═══════ 3D Shelf Bar ═══════ */
 function Shelf3D() {
   return (
-    <div className="relative" style={{ height: 48, perspective: '600px' }}>
-      {/* ── Top surface (the platform books rest on) ── */}
+    <div className="relative" style={{ height: 32, perspective: '600px' }}>
+      {/* Top surface — the platform books rest on */}
       <div
         className="absolute left-0 right-0 top-0"
         style={{
-          height: 14,
-          background: 'linear-gradient(180deg, #C4A882 0%, #B09570 30%, #9E8362 100%)',
+          height: 10,
+          background: 'linear-gradient(180deg, #C4A882, #B09570)',
           borderRadius: '2px 2px 0 0',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1)',
+          transform: 'rotateX(20deg)',
+          transformOrigin: 'bottom center',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
         }}
-      >
-        {/* Wood grain on top */}
-        <div
-          className="absolute inset-0 opacity-15 pointer-events-none"
-          style={{
-            backgroundImage: `
-              repeating-linear-gradient(
-                87deg,
-                transparent,
-                transparent 8px,
-                rgba(90,60,30,0.3) 8px,
-                rgba(90,60,30,0.15) 9px,
-                transparent 9px,
-                transparent 20px,
-                rgba(90,60,30,0.2) 20px,
-                rgba(90,60,30,0.1) 21px
-              )
-            `,
-          }}
-        />
-        {/* Subtle highlight line along front edge */}
-        <div
-          className="absolute left-0 right-0 bottom-0 h-[1px]"
-          style={{ background: 'rgba(255,255,255,0.15)' }}
-        />
-      </div>
-
-      {/* ── Front face (vertical drop — the protruding part) ── */}
+      />
+      {/* Front face */}
       <div
         className="absolute left-0 right-0"
         style={{
-          top: 14,
-          height: 22,
-          background: 'linear-gradient(180deg, #8B7355 0%, #7A6347 25%, #6B5740 60%, #5A4A35 100%)',
+          top: 8,
+          height: 18,
+          background: 'linear-gradient(180deg, #8B7355, #6B5740)',
           borderRadius: '0 0 4px 4px',
-          boxShadow: `
-            inset 0 1px 0 rgba(255,255,255,0.08),
-            inset 0 -1px 0 rgba(0,0,0,0.15),
-            0 4px 8px -2px rgba(60,40,20,0.35),
-            0 8px 20px -4px rgba(60,40,20,0.2)
-          `,
+          boxShadow: '0 4px 12px -2px rgba(60,40,20,0.25)',
         }}
       >
-        {/* Wood grain on front */}
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none rounded-b"
-          style={{
-            backgroundImage: `
-              repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 12px,
-                rgba(0,0,0,0.15) 12px,
-                rgba(0,0,0,0.08) 13px,
-                transparent 13px,
-                transparent 28px,
-                rgba(0,0,0,0.12) 28px,
-                rgba(0,0,0,0.05) 29px
-              )
-            `,
-          }}
-        />
-        {/* Knot detail */}
-        <div
-          className="absolute opacity-[0.06] rounded-full pointer-events-none"
-          style={{
-            width: 18,
-            height: 10,
-            left: '30%',
-            top: 6,
-            background: 'radial-gradient(ellipse, rgba(60,30,0,0.5) 0%, transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute opacity-[0.04] rounded-full pointer-events-none"
-          style={{
-            width: 14,
-            height: 8,
-            left: '72%',
-            top: 8,
-            background: 'radial-gradient(ellipse, rgba(60,30,0,0.5) 0%, transparent 70%)',
-          }}
-        />
-
-        {/* Bottom edge bevel */}
-        <div
-          className="absolute left-1 right-1 bottom-0 h-[1px] rounded-b"
-          style={{ background: 'rgba(255,255,255,0.05)' }}
-        />
+        {/* Wood grain */}
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 14px, rgba(0,0,0,0.15) 14px, rgba(0,0,0,0.08) 15px)' }} />
       </div>
-
-      {/* ── Shelf bracket / support hints (left & right) ── */}
-      <div
-        className="absolute"
-        style={{
-          left: 24,
-          top: 14,
-          width: 8,
-          height: 22,
-          background: 'linear-gradient(90deg, rgba(0,0,0,0.08) 0%, transparent 100%)',
-        }}
-      />
-      <div
-        className="absolute"
-        style={{
-          right: 24,
-          top: 14,
-          width: 8,
-          height: 22,
-          background: 'linear-gradient(-90deg, rgba(0,0,0,0.08) 0%, transparent 100%)',
-        }}
-      />
-
-      {/* ── Shadow cast below the shelf ── */}
-      <div
-        className="absolute left-4 right-4"
-        style={{
-          top: 36,
-          height: 18,
-          background: 'radial-gradient(ellipse 90% 100% at 50% 0%, rgba(40,25,10,0.25) 0%, rgba(40,25,10,0.08) 50%, transparent 100%)',
-          filter: 'blur(4px)',
-        }}
-      />
+      {/* Under-shelf shadow */}
+      <div className="absolute left-4 right-4" style={{ top: 26, height: 10, background: 'radial-gradient(ellipse 90% 100% at 50% 0%, rgba(40,25,10,0.12), transparent)', filter: 'blur(3px)' }} />
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Add Book Card Component
-   ───────────────────────────────────────────── */
-interface AddBookCardProps {
-  index: number;
-  shelfIndex: number;
-  onClick: () => void;
-}
-
-function AddBookCard({ index, shelfIndex, onClick }: AddBookCardProps) {
+/* ═══════ Add Card ═══════ */
+function AddCard({ index, shelfIndex, onClick }: { index: number; shelfIndex: number; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{
-        delay: shelfIndex * 0.15 + index * 0.08,
-        duration: 0.5,
-        ease: [0.25, 0.8, 0.25, 1],
-      }}
+      transition={{ delay: shelfIndex * 0.1 + index * 0.06, duration: 0.4 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="relative cursor-pointer"
-      style={{ perspective: '1000px' }}
       onClick={onClick}
+      className="cursor-pointer"
     >
       <motion.div
-        animate={{
-          y: hovered ? -18 : 0,
-          scale: hovered ? 1.04 : 1,
-        }}
-        transition={{
-          duration: 0.4,
-          ease: [0.25, 0.8, 0.25, 1],
-        }}
-        className="relative"
-        style={{ transformStyle: 'preserve-3d' }}
+        animate={{ y: hovered ? -8 : 0, scale: hovered ? 1.03 : 1 }}
+        transition={{ duration: 0.3 }}
+        className="relative rounded-2xl flex flex-col items-center justify-center gap-3"
+        style={{ aspectRatio: '3/4.2', background: 'linear-gradient(145deg, #B8A68E, #9E8A72, #8B7760)', border: '2px dashed rgba(255,255,255,0.3)' }}
       >
-        {/* ── Grounding shadow ── */}
-        <motion.div
-          className="absolute left-1/2 bottom-0 -translate-x-1/2 pointer-events-none"
-          animate={{
-            width: hovered ? '92%' : '80%',
-            height: hovered ? 14 : 6,
-            opacity: hovered ? 0.2 : 0.4,
-            filter: hovered ? 'blur(10px)' : 'blur(4px)',
-            y: hovered ? 20 : 2,
-          }}
-          transition={{ duration: 0.4, ease: [0.25, 0.8, 0.25, 1] }}
-          style={{
-            background: 'radial-gradient(ellipse, rgba(30,15,0,0.8) 0%, transparent 70%)',
-            transformOrigin: 'bottom center',
-          }}
-        />
-
-        {/* ── Card body ── */}
-        <div
-          className="relative overflow-visible"
-          style={{ aspectRatio: '4/5', transformStyle: 'preserve-3d' }}
-        >
-          {/* Spine */}
-          <div
-            className="absolute left-0 top-0 bottom-0 z-0"
-            style={{
-              width: 16,
-              background: 'linear-gradient(90deg, #5A4A35 0%, #6B5740 40%, #7A6347 100%)',
-              transform: 'translateX(-12px) skewY(-2deg)',
-              borderRadius: '3px 0 0 3px',
-              boxShadow: 'inset -1px 0 2px rgba(0,0,0,0.3), -2px 2px 6px rgba(0,0,0,0.2)',
-            }}
-          />
-
-          {/* Front face */}
-          <div
-            className="relative w-full h-full rounded-lg overflow-hidden z-10 flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(145deg, #9E8A72 0%, #8B7355 50%, #7A6347 100%)',
-              boxShadow: hovered
-                ? '4px 8px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.05) inset'
-                : '2px 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.05) inset',
-            }}
-          >
-            {/* Glossy highlight */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 25%, transparent 50%, rgba(0,0,0,0.05) 100%)',
-              }}
-            />
-
-            {/* Dashed border inset */}
-            <div
-              className="absolute inset-3 rounded-md pointer-events-none"
-              style={{
-                border: `2px dashed ${hovered ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)'}`,
-                transition: 'border-color 0.3s ease',
-              }}
-            />
-
-            {/* Plus icon */}
-            <motion.div
-              animate={{
-                scale: hovered ? 1.15 : 1,
-              }}
-              transition={{ duration: 0.3, ease: [0.25, 0.8, 0.25, 1] }}
-              className="flex flex-col items-center gap-3"
-            >
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center"
-                style={{
-                  background: hovered
-                    ? 'rgba(255,255,255,0.25)'
-                    : 'rgba(255,255,255,0.12)',
-                  transition: 'background 0.3s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                }}
-              >
-                <Plus className="w-7 h-7 text-white/80" />
-              </div>
-              <span className="text-[11px] text-white/60 uppercase tracking-widest">
-                Add Book
-              </span>
-            </motion.div>
-
-            {/* Page edges (right side) */}
-            <div
-              className="absolute right-0 top-2 bottom-2 w-[5px] pointer-events-none"
-              style={{
-                background: `linear-gradient(90deg, 
-                  rgba(255,255,255,0.04) 0%, 
-                  rgba(245,240,230,0.6) 20%, 
-                  rgba(245,240,230,0.8) 50%, 
-                  rgba(235,230,220,0.6) 80%, 
-                  rgba(220,215,205,0.4) 100%
-                )`,
-                borderRadius: '0 2px 2px 0',
-              }}
-            />
-            <div
-              className="absolute right-[5px] top-3 bottom-3 w-[2px] pointer-events-none"
-              style={{ background: 'rgba(245,240,230,0.25)' }}
-            />
-          </div>
-
-          {/* Bottom edge */}
-          <div
-            className="absolute left-0 right-0 bottom-0 z-0"
-            style={{
-              height: 6,
-              background: 'linear-gradient(180deg, #6B5740 0%, #5A4A35 100%)',
-              transform: 'translateY(4px)',
-              borderRadius: '0 0 4px 4px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-            }}
-          />
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+          <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-white/80" />
         </div>
+        <span className="text-[10px] sm:text-xs text-white/60 uppercase tracking-widest font-medium">Add Book</span>
       </motion.div>
     </motion.div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Book Card Component
-   ───────────────────────────────────────────── */
+/* ═══════ Book Card (Three.js) ═══════ */
 interface BookCardProps {
   book: Book;
   index: number;
@@ -397,308 +145,68 @@ interface BookCardProps {
 
 function BookCard({ book, index, shelfIndex, onOpen, onRequestDelete }: BookCardProps) {
   const [hovered, setHovered] = useState(false);
-  const navigate = useNavigate();
-  const bookHasPdf = book.hasPdf || hasPdf(book.id);
+  const didDrag = useRef(false);
 
-  const baseColor = book.coverColor;
-  const darkColor = adjustBrightness(baseColor, -30);
-  const darkerColor = adjustBrightness(baseColor, -50);
-  const spineColor = adjustBrightness(baseColor, -40);
+  const handlePointerDown = () => { didDrag.current = false; };
+  const handlePointerMove = () => { didDrag.current = true; };
+  const handleClick = () => { if (!didDrag.current) onOpen(); };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{
-        delay: shelfIndex * 0.15 + index * 0.08,
-        duration: 0.5,
-        ease: [0.25, 0.8, 0.25, 1],
-      }}
+      transition={{ delay: shelfIndex * 0.1 + index * 0.06, duration: 0.4 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="relative cursor-pointer"
-      style={{ perspective: '1000px' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onClick={handleClick}
     >
-      {/* The whole book wrapper — handles the lift + shadow */}
       <motion.div
-        animate={{
-          y: hovered ? -18 : 0,
-          scale: hovered ? 1.04 : 1,
-        }}
-        transition={{
-          duration: 0.4,
-          ease: [0.25, 0.8, 0.25, 1],
-        }}
-        className="relative"
-        style={{ transformStyle: 'preserve-3d' }}
+        animate={{ y: hovered ? -10 : 0, scale: hovered ? 1.02 : 1 }}
+        transition={{ duration: 0.3, ease: [0.25, 0.8, 0.25, 1] }}
+        className="relative overflow-visible"
+        style={{ aspectRatio: '3/4.2' }}
       >
-        {/* ── Grounding shadow (sits below the book) ── */}
-        <motion.div
-          className="absolute left-1/2 bottom-0 -translate-x-1/2 pointer-events-none"
-          animate={{
-            width: hovered ? '92%' : '80%',
-            height: hovered ? 14 : 6,
-            opacity: hovered ? 0.2 : 0.4,
-            filter: hovered ? 'blur(10px)' : 'blur(4px)',
-            y: hovered ? 20 : 2,
-          }}
-          transition={{ duration: 0.4, ease: [0.25, 0.8, 0.25, 1] }}
-          style={{
-            background: 'radial-gradient(ellipse, rgba(30,15,0,0.8) 0%, transparent 70%)',
-            transformOrigin: 'bottom center',
-          }}
+        {/* Three.js book — same model as the create/edit page */}
+        <Book3DCanvas
+          color={book.coverColor}
+          title={book.title}
+          author={book.author}
+          category={book.category}
+          interactive={true}
+          zoom={1.1}
+          coverImage={book.coverImage}
+          coverImageTransform={book.coverImageTransform}
         />
 
-        {/* ── Book body (aspect 4:5) ── */}
-        <div
-          className="relative overflow-visible"
-          style={{
-            aspectRatio: '4/5',
-            transformStyle: 'preserve-3d',
-          }}
-          onClick={() => onOpen()}
-        >
-          {/* Spine (left edge — 3D effect via skew) */}
-          <div
-            className="absolute left-0 top-0 bottom-0 z-0"
-            style={{
-              width: 16,
-              background: `linear-gradient(90deg, ${darkerColor} 0%, ${spineColor} 40%, ${darkColor} 100%)`,
-              transform: 'translateX(-12px) skewY(-2deg)',
-              borderRadius: '3px 0 0 3px',
-              boxShadow: `inset -1px 0 2px rgba(0,0,0,0.3), -2px 2px 6px rgba(0,0,0,0.2)`,
-            }}
+        {/* Hover overlay — no box, just floating label */}
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 flex items-end justify-center pb-2 z-10 pointer-events-none"
           >
-            {/* Spine texture lines */}
-            <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 6px, rgba(255,255,255,0.15) 6px, rgba(255,255,255,0.15) 7px)',
-              }}
-            />
-          </div>
-
-          {/* Front cover */}
-          <div
-            className="relative w-full h-full rounded-lg overflow-hidden z-10"
-            style={{
-              background: `linear-gradient(145deg, ${baseColor} 0%, ${adjustBrightness(baseColor, -10)} 50%, ${darkColor} 100%)`,
-              boxShadow: hovered
-                ? `4px 8px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.05) inset`
-                : `2px 4px 12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.05) inset`,
-            }}
-          >
-            {/* Glossy highlight overlay */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 25%, transparent 50%, rgba(0,0,0,0.05) 100%)',
-              }}
-            />
-
-            {/* Subtle edge light (top & left) */}
-            <div
-              className="absolute top-0 left-0 right-0 h-[1px] pointer-events-none"
-              style={{ background: 'rgba(255,255,255,0.2)' }}
-            />
-            <div
-              className="absolute top-0 left-0 bottom-0 w-[1px] pointer-events-none"
-              style={{ background: 'rgba(255,255,255,0.12)' }}
-            />
-
-            {/* Cover content */}
-            <div className="absolute inset-0 p-5 flex flex-col justify-between">
-              <div>
-                {/* Decorative line */}
-                <div
-                  className="w-10 h-[2px] mb-4 rounded-full"
-                  style={{ background: 'rgba(255,255,255,0.3)' }}
-                />
-                <h3 className="text-white font-bold text-[15px] leading-snug mb-2 drop-shadow-lg">
-                  {book.title}
-                </h3>
-                <p className="text-white/70 text-xs drop-shadow">
-                  {book.author}
-                </p>
-              </div>
-
-              <div className="flex items-end justify-between">
-                {/* Category tag */}
-                <span className="text-[9px] text-white/50 uppercase tracking-widest">
-                  {book.category}
-                </span>
-
-                {/* PDF badge */}
-                {bookHasPdf && (
-                  <div className="flex items-center gap-1 bg-white/15 backdrop-blur-sm rounded-md px-2 py-0.5">
-                    <FileText className="w-3 h-3 text-white/80" />
-                    <span className="text-[9px] text-white/80 font-medium">PDF</span>
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-medium pointer-events-auto" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+              <Eye className="w-3 h-3" /> Open
             </div>
+          </motion.div>
+        )}
 
-            {/* Page edges (right side) */}
-            <div
-              className="absolute right-0 top-2 bottom-2 w-[5px] pointer-events-none"
-              style={{
-                background: `linear-gradient(90deg, 
-                  rgba(255,255,255,0.04) 0%, 
-                  rgba(245,240,230,0.6) 20%, 
-                  rgba(245,240,230,0.8) 50%, 
-                  rgba(235,230,220,0.6) 80%, 
-                  rgba(220,215,205,0.4) 100%
-                )`,
-                borderRadius: '0 2px 2px 0',
-              }}
-            />
-            <div
-              className="absolute right-[5px] top-3 bottom-3 w-[2px] pointer-events-none"
-              style={{
-                background: 'rgba(245,240,230,0.25)',
-              }}
-            />
-            <div
-              className="absolute right-[7px] top-4 bottom-4 w-[1px] pointer-events-none"
-              style={{
-                background: 'rgba(245,240,230,0.12)',
-              }}
-            />
-
-            {/* ── Hover overlay: "Open" & "Details" buttons ── */}
-            <motion.div
-              className="absolute inset-0 flex flex-col items-center justify-end pb-6 gap-2.5 z-20"
-              initial={false}
-              animate={{
-                opacity: hovered ? 1 : 0,
-              }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-              style={{ pointerEvents: hovered ? 'auto' : 'none' }}
-            >
-              {/* Gradient scrim */}
-              <div
-                className="absolute inset-0 rounded-lg pointer-events-none"
-                style={{
-                  background: 'linear-gradient(180deg, transparent 30%, rgba(0,0,0,0.55) 100%)',
-                }}
-              />
-
-              {/* Open button */}
-              <motion.button
-                className="relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium border border-white/30"
-                style={{
-                  background: 'rgba(0,0,0,0.7)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-                animate={{
-                  y: hovered ? 0 : 12,
-                  opacity: hovered ? 1 : 0,
-                }}
-                transition={{
-                  duration: 0.3,
-                  delay: hovered ? 0.08 : 0,
-                  ease: [0.25, 0.8, 0.25, 1],
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpen();
-                }}
-                whileHover={{ scale: 1.05, background: 'rgba(15,111,255,0.85)' }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Eye className="w-4 h-4" />
-                Open
-              </motion.button>
-
-              {/* Details button */}
-              <motion.button
-                className="relative z-10 flex items-center gap-2 px-5 py-2 rounded-full text-white/80 text-xs font-medium border border-white/20"
-                style={{
-                  background: 'rgba(0,0,0,0.45)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-                animate={{
-                  y: hovered ? 0 : 12,
-                  opacity: hovered ? 1 : 0,
-                }}
-                transition={{
-                  duration: 0.3,
-                  delay: hovered ? 0.15 : 0,
-                  ease: [0.25, 0.8, 0.25, 1],
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Could open a details panel in the future
-                }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Info className="w-3.5 h-3.5" />
-                {book.pages} pages
-              </motion.button>
-
-              {/* Delete button */}
-              {onRequestDelete && (
-                <motion.button
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full text-white border border-white/20"
-                  style={{
-                    background: 'rgba(0,0,0,0.55)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                  }}
-                  animate={{
-                    opacity: hovered ? 1 : 0,
-                    scale: hovered ? 1 : 0.8,
-                  }}
-                  transition={{
-                    duration: 0.25,
-                    delay: hovered ? 0.05 : 0,
-                    ease: [0.25, 0.8, 0.25, 1],
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRequestDelete(book);
-                  }}
-                  aria-label={`Delete ${book.title}`}
-                  whileHover={{ scale: 1.1, background: 'rgba(220,38,38,0.9)' }}
-                  whileTap={{ scale: 0.92 }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </motion.button>
-              )}
-            </motion.div>
-          </div>
-
-          {/* Bottom edge (book thickness at bottom) */}
-          <div
-            className="absolute left-0 right-0 bottom-0 z-0"
-            style={{
-              height: 6,
-              background: `linear-gradient(180deg, ${darkColor} 0%, ${darkerColor} 100%)`,
-              transform: 'translateY(4px)',
-              borderRadius: '0 0 4px 4px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-            }}
-          />
-        </div>
+        {/* Delete */}
+        {onRequestDelete && hovered && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={(e) => { e.stopPropagation(); onRequestDelete(book); }}
+            className="absolute top-1 right-1 z-20 p-1.5 rounded-full text-white cursor-pointer"
+            style={{ background: 'rgba(220,38,38,0.85)' }}
+          >
+            <Trash2 className="w-3 h-3" />
+          </motion.button>
+        )}
       </motion.div>
     </motion.div>
   );
-}
-
-/* ─── Color helper ─── */
-function adjustBrightness(color: string, percent: number): string {
-  const num = parseInt(color.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return '#' + (
-    0x1000000 +
-    (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-    (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-    (B < 255 ? (B < 1 ? 0 : B) : 255)
-  ).toString(16).slice(1);
 }

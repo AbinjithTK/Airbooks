@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, FileText, PenLine } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import gsap from 'gsap';
 import { Book } from '../../types';
+import { Book3DCanvas } from '../book-3d-canvas';
 
 interface BookFanCarouselProps {
   books: Book[];
@@ -28,13 +29,7 @@ function getSlotConfig(totalCards: number, slot: number) {
   const center = totalCards >> 1;
   const distance = totalCards > 1 ? (slot - center) / center : 0;
   const absD = Math.abs(distance);
-  return {
-    rot: distance * 18,
-    scale: 1.0 - 0.25 * absD * absD,
-    x: distance * 28,
-    y: absD * absD * 5,
-    zIndex: 10 - Math.abs(slot - center),
-  };
+  return { rot: distance * 18, scale: 1.0 - 0.25 * absD * absD, x: distance * 28, y: absD * absD * 5, zIndex: 10 - Math.abs(slot - center) };
 }
 
 function getResponsiveMultiplier(w: number) {
@@ -52,22 +47,15 @@ export function BookFanCarousel({ books, onOpenBook, onAddBook, onWriteBook }: B
   const directionRef = useRef<'left' | 'right' | null>(null);
   const prevVisible = useRef<Set<number>>(new Set());
 
-  // Add "add card" as first item
   type Item = { type: 'add' } | { type: 'book'; book: Book; idx: number };
-  const items: Item[] = [
-    { type: 'add' },
-    ...books.map((book, idx) => ({ type: 'book' as const, book, idx })),
-  ];
+  const items: Item[] = [{ type: 'add' }, ...books.map((book, idx) => ({ type: 'book' as const, book, idx }))];
   const totalCards = items.length;
   const needsPagination = totalCards > MAX_VISIBLE;
   const [centerIndex, setCenterIndex] = useState(needsPagination ? HALF : totalCards >> 1);
 
   const getVisibleMap = useCallback((center: number) => {
     const map = new Map<number, number>();
-    if (!needsPagination) {
-      items.forEach((_, i) => map.set(i, i));
-      return map;
-    }
+    if (!needsPagination) { items.forEach((_, i) => map.set(i, i)); return map; }
     for (let slot = 0; slot < MAX_VISIBLE; slot++) {
       map.set(((center + slot - HALF) % totalCards + totalCards) % totalCards, slot);
     }
@@ -86,7 +74,6 @@ export function BookFanCarousel({ books, onOpenBook, onAddBook, onWriteBook }: B
     if (!container || !totalCards) return;
     const cardEls = Array.from(container.querySelectorAll<HTMLElement>('.fan-card'));
     if (!cardEls.length) return;
-
     const visibleMap = getVisibleMap(centerIndex);
     const prev = prevVisible.current;
     const direction = directionRef.current;
@@ -94,11 +81,9 @@ export function BookFanCarousel({ books, onOpenBook, onAddBook, onWriteBook }: B
     const mult = getResponsiveMultiplier(window.innerWidth);
     const slotCount = needsPagination ? MAX_VISIBLE : totalCards;
     const config = (slot: number) => getSlotConfig(slotCount, slot);
-
     if (isFirst) isAnimating.current = true;
     let done = 0;
     const onDone = () => { if (++done >= visibleMap.size) { isAnimating.current = false; if (isFirst) hasEntered.current = true; } };
-
     cardEls.forEach((card, i) => {
       const slot = visibleMap.get(i);
       const was = prev.has(i);
@@ -133,36 +118,28 @@ export function BookFanCarousel({ books, onOpenBook, onAddBook, onWriteBook }: B
 
   return (
     <section className="flex flex-col items-center w-full py-8 relative">
-      {/* Fan container */}
-      <div ref={containerRef} className="relative flex justify-center items-center w-full min-h-[22rem] sm:min-h-[26rem] md:min-h-[30rem] lg:min-h-[34rem]">
+      <div ref={containerRef} className="relative flex justify-center items-center w-full min-h-[16rem] sm:min-h-[20rem] md:min-h-[24rem] lg:min-h-[28rem]">
         {items.map((item, index) => (
-          <div
+          <FanCardWrapper
             key={item.type === 'add' ? '__add__' : (item as any).book.id}
-            className="fan-card absolute w-[10rem] h-[14rem] sm:w-[12rem] sm:h-[16rem] md:w-[14rem] md:h-[19rem] lg:w-[16rem] lg:h-[22rem] rounded-2xl overflow-hidden cursor-pointer select-none"
-            style={{ willChange: 'transform, opacity' }}
-            onClick={() => item.type === 'add' ? onAddBook() : onOpenBook((item as any).book)}
-          >
-            {item.type === 'add' ? (
-              <AddCard />
-            ) : (
-              <BookCard book={(item as any).book} onWrite={onWriteBook ? () => onWriteBook((item as any).book) : undefined} />
-            )}
-          </div>
+            item={item}
+            onAdd={onAddBook}
+            onOpen={onOpenBook}
+          />
         ))}
       </div>
 
-      {/* Pagination arrows */}
       {needsPagination && (
         <div className="flex items-center justify-center gap-5 mt-4 z-30">
-          <button onClick={() => cycle('left')} aria-label="Previous" className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer" style={{ background: 'linear-gradient(145deg, rgba(60,40,20,0.9), rgba(25,15,5,0.95))', boxShadow: '0 4px 12px -3px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,200,100,0.08)', border: '1px solid rgba(255,200,100,0.08)' }}>
+          <button onClick={() => cycle('left')} aria-label="Previous" className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors">
             {chevron('left')}
           </button>
           <div className="flex items-center gap-1.5">
             {items.map((_, i) => (
-              <span key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i === centerIndex ? 'bg-amber-200/80 scale-[1.4]' : 'bg-white/15'}`} />
+              <span key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i === centerIndex ? 'bg-[#4285F4] scale-[1.4]' : 'bg-gray-300 dark:bg-white/20'}`} />
             ))}
           </div>
-          <button onClick={() => cycle('right')} aria-label="Next" className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer" style={{ background: 'linear-gradient(145deg, rgba(60,40,20,0.9), rgba(25,15,5,0.95))', boxShadow: '0 4px 12px -3px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,200,100,0.08)', border: '1px solid rgba(255,200,100,0.08)' }}>
+          <button onClick={() => cycle('right')} aria-label="Next" className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors">
             {chevron('right')}
           </button>
         </div>
@@ -171,63 +148,56 @@ export function BookFanCarousel({ books, onOpenBook, onAddBook, onWriteBook }: B
   );
 }
 
+/* ─── Fan Card Wrapper — handles drag vs click ─── */
+function FanCardWrapper({ item, onAdd, onOpen }: { item: any; onAdd: () => void; onOpen: (book: Book) => void }) {
+  const didDrag = useRef(false);
+  const handleDown = () => { didDrag.current = false; };
+  const handleMove = () => { didDrag.current = true; };
+  const handleClick = () => {
+    if (didDrag.current) return; // Don't open if user dragged
+    if (item.type === 'add') onAdd();
+    else onOpen(item.book);
+  };
+
+  return (
+    <div
+      className="fan-card absolute w-[8rem] h-[11rem] sm:w-[10rem] sm:h-[14rem] md:w-[12rem] md:h-[16rem] lg:w-[14rem] lg:h-[19rem] overflow-visible cursor-pointer select-none"
+      style={{ willChange: 'transform, opacity' }}
+      onPointerDown={handleDown}
+      onPointerMove={handleMove}
+      onClick={handleClick}
+    >
+      {item.type === 'add' ? <AddCard /> : <BookCard book={item.book} />}
+    </div>
+  );
+}
+
 /* ─── Add Card ─── */
 function AddCard() {
   return (
-    <div className="w-full h-full rounded-2xl flex flex-col items-center justify-center gap-3" style={{ background: 'linear-gradient(145deg, rgba(60,40,20,0.7), rgba(30,18,8,0.8))', boxShadow: '0 8px 24px -4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,200,100,0.06), inset 0 -2px 4px rgba(0,0,0,0.2)', border: '2px dashed rgba(255,200,100,0.15)' }}>
-      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(145deg, #5BA3FF, #0F6FFF, #0050CC)', boxShadow: '0 4px 14px -3px rgba(15,111,255,0.5), inset 0 1px 2px rgba(255,255,255,0.2)' }}>
-        <Plus className="w-6 h-6 text-white" />
+    <div className="w-full h-full rounded-2xl flex flex-col items-center justify-center gap-3" style={{ background: 'linear-gradient(145deg, #B8A68E, #9E8A72, #8B7760)', border: '2px dashed rgba(255,255,255,0.3)' }}>
+      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+        <Plus className="w-5 h-5 text-white/80" />
       </div>
-      <span className="text-[11px] text-amber-200/50 uppercase tracking-widest font-semibold">Add Book</span>
+      <span className="text-[10px] text-white/60 uppercase tracking-widest font-medium">Add Book</span>
     </div>
   );
 }
 
-/* ─── Book Card ─── */
-function BookCard({ book, onWrite }: { book: Book; onWrite?: () => void }) {
-  const darkColor = adjustBrightness(book.coverColor, -30);
+/* ─── Book Card (Three.js) ─── */
+function BookCard({ book }: { book: Book }) {
   return (
-    <div className="w-full h-full rounded-2xl relative overflow-hidden group" style={{ background: `linear-gradient(145deg, ${adjustBrightness(book.coverColor, 10)} 0%, ${book.coverColor} 40%, ${darkColor} 100%)`, boxShadow: '0 8px 24px -4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.15), inset 0 -2px 4px rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)' }}>
-      {/* Glossy overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 30%, transparent 60%)' }} />
-      {/* Content */}
-      <div className="absolute inset-0 p-5 flex flex-col justify-between">
-        <div>
-          <h3 className="text-white font-bold text-sm md:text-base leading-tight mb-1.5 drop-shadow-md">{book.title}</h3>
-          <p className="text-white/65 text-xs">{book.author}</p>
-        </div>
-        <div className="flex items-end justify-between">
-          <span className="text-[9px] text-white/40 uppercase tracking-widest">{book.category}</span>
-          {book.hasPdf && (
-            <div className="flex items-center gap-1 bg-white/15 backdrop-blur-sm rounded-md px-2 py-0.5">
-              <FileText className="w-3 h-3 text-white/80" />
-              <span className="text-[9px] text-white/80 font-medium">PDF</span>
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Write button (appears on hover) */}
-      {onWrite && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onWrite(); }}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.15)' }}
-          aria-label="Write"
-        >
-          <PenLine className="w-3.5 h-3.5 text-white/80" />
-        </button>
-      )}
-      {/* Page edges */}
-      <div className="absolute right-0 top-3 bottom-3 w-[5px] pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.03), #F5F0E6 30%, #EDE8DC 60%, #E0D8CC 100%)', borderRadius: '0 6px 6px 0' }} />
+    <div className="w-full h-full relative overflow-visible">
+      <Book3DCanvas
+        color={book.coverColor}
+        title={book.title}
+        author={book.author}
+        category={book.category}
+        interactive={true}
+        zoom={1.05}
+        coverImage={book.coverImage}
+        coverImageTransform={book.coverImageTransform}
+      />
     </div>
   );
-}
-
-function adjustBrightness(color: string, percent: number): string {
-  const num = parseInt(color.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = ((num >> 8) & 0xff) + amt;
-  const B = (num & 0xff) + amt;
-  return '#' + (0x1000000 + (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 + (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 + (B < 255 ? (B < 1 ? 0 : B) : 255)).toString(16).slice(1);
 }

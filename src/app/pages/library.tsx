@@ -86,31 +86,31 @@ export function LibraryPage() {
   const [fabOpen, setFabOpen] = useState(false);
 
   return (
-    <div className="py-8">
+    <div className="py-4 sm:py-8 px-2">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 sm:mb-8">
         <div />
 
         <div className="flex items-center gap-4">
-          {/* View Toggle */}
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#0F6FFF]/10 dark:border-[#3B82F6]/20">
+          {/* View Toggle — large rounded pills */}
+          <div className="inline-flex items-center gap-2 p-2 rounded-2xl bg-gray-100 dark:bg-white/10">
             <ViewToggleButton
               active={viewMode === 'fan'}
               onClick={() => setView('fan')}
-              icon={<Layers className="w-4 h-4" />}
+              icon={<Layers className="w-5 h-5" />}
               label="Fan"
             />
             <ViewToggleButton
               active={viewMode === 'shelf'}
               onClick={() => setView('shelf')}
-              icon={<Library className="w-4 h-4" />}
+              icon={<Library className="w-5 h-5" />}
               label="Shelf"
             />
             <ViewToggleButton
               active={viewMode === 'grid'}
               onClick={() => setView('grid')}
-              icon={<Grid className="w-4 h-4" />}
+              icon={<Grid className="w-5 h-5" />}
               label="Grid"
             />
           </div>
@@ -242,10 +242,10 @@ function ViewToggleButton({ active, onClick, icon, label }: ViewToggleButtonProp
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+      className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
         active
-          ? 'bg-white dark:bg-[#0A1628] text-[#0F6FFF] dark:text-[#3B82F6] shadow-sm'
-          : 'text-[#64748B] dark:text-[#94A3B8] hover:text-[#1A2332] dark:hover:text-[#F1F5F9]'
+          ? 'bg-white dark:bg-white/15 text-[#4285F4] shadow-sm'
+          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
       }`}
     >
       {icon}
