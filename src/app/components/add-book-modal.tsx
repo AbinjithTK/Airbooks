@@ -206,6 +206,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
                 <button
                   onClick={() => { resetForm(); onClose(); }}
                   className="p-2 rounded-lg hover:bg-[#F8FAFB] dark:hover:bg-[#1E293B] transition-colors"
+                  aria-label="Close"
                 >
                   <X className="w-5 h-5 text-[#64748B]" />
                 </button>
@@ -275,6 +276,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
                         type="button"
                         onClick={removePdfFile}
                         className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-black/20 transition-colors"
+                        aria-label="Remove PDF file"
                       >
                         <X className="w-4 h-4 text-[#64748B]" />
                       </button>
@@ -354,6 +356,7 @@ export function AddBookModal({ isOpen, onClose, onAdded }: AddBookModalProps) {
                       <button
                         key={color}
                         type="button"
+                        aria-label={`Select cover color ${color}`}
                         onClick={() => setCoverColor(color)}
                         className={`w-12 h-12 rounded-xl transition-all ${
                           coverColor === color
