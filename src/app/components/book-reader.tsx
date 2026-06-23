@@ -172,6 +172,7 @@ export function BookReaderCore({
               onClick={() => navigate('/')}
               className="p-2.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 flex-shrink-0"
               style={{ background: ft.pageBackground, color: rt.headerText }}
+              aria-label="Close reader"
             >
               <X className="w-5 h-5" />
             </button>
@@ -195,6 +196,7 @@ export function BookReaderCore({
             className="p-2.5 rounded-xl shadow transition-all hover:scale-105 active:scale-95 text-xs font-bold"
             style={{ background: ft.pageBackground, color: rt.metaColor }}
             title="Change theme"
+            aria-label="Change reader theme"
           >
             Aa
           </button>
@@ -204,6 +206,7 @@ export function BookReaderCore({
               className="p-2.5 rounded-xl shadow transition-all hover:scale-105 active:scale-95"
               style={{ background: ft.pageBackground, color: rt.titleAccent }}
               title="Share or embed this book"
+              aria-label="Share or embed this book"
             >
               <Share2 className="w-4 h-4" />
             </button>
@@ -235,6 +238,7 @@ export function BookReaderCore({
                 <button
                   key={key}
                   title={flipThemes[key].name}
+                  aria-label={`Select page theme ${flipThemes[key].name}`}
                   onClick={() => chooseFlipTheme(key)}
                   className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110"
                   style={{
@@ -268,6 +272,7 @@ export function BookReaderCore({
                   <button
                     key={key}
                     title={t.name}
+                    aria-label={`Select reader theme ${t.name}`}
                     onClick={() => chooseReaderTheme(key)}
                     className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110 flex items-center justify-center text-[9px] font-bold"
                     style={{
@@ -305,6 +310,7 @@ export function BookReaderCore({
             disabled={atStart || isFlipping}
             className="p-4 rounded-full shadow-xl hover:shadow-2xl transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95 z-20"
             style={{ background: ft.pageBackground }}
+            aria-label="Previous page"
           >
             <ChevronLeft className="w-6 h-6" style={{ color: rt.titleAccent }} />
           </button>
@@ -334,6 +340,7 @@ export function BookReaderCore({
             disabled={atEnd || isFlipping}
             className="p-4 rounded-full shadow-xl hover:shadow-2xl transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95 z-20"
             style={{ background: ft.pageBackground }}
+            aria-label="Next page"
           >
             <ChevronRight className="w-6 h-6" style={{ color: rt.titleAccent }} />
           </button>
@@ -535,6 +542,7 @@ function ShareModal({ book, setBooks, onClose }: ShareModalProps) {
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-[#F1F5F9] dark:hover:bg-[#1E293B] transition-colors"
+              aria-label="Close sharing dialog"
             >
               <X className="w-4 h-4 text-[#64748B]" />
             </button>
