@@ -86,7 +86,7 @@ export function AirBooksNav({
               className="w-full sm:w-60 md:w-72 pl-11 sm:pl-14 pr-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl text-sm sm:text-base text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 bg-gray-100 dark:bg-white/10 border-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
             />
             {searchQuery && (
-              <button onClick={() => onSearchChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer">
+              <button aria-label="Clear search query" onClick={() => onSearchChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -106,6 +106,7 @@ export function AirBooksNav({
 
           {/* Theme toggle */}
           <motion.button
+            aria-label={isDarkMode ? "Switch to light theme" : "Switch to dark theme"}
             onClick={onThemeToggle}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -117,6 +118,8 @@ export function AirBooksNav({
           {/* Profile */}
           <div className="relative" ref={menuRef}>
             <motion.button
+              aria-label="User profile menu"
+              aria-expanded={menuOpen}
               onClick={() => setMenuOpen((o) => !o)}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
